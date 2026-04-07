@@ -705,9 +705,14 @@ func (m Model) filterOnly(files []string) []string {
 			// resolve absolute pattern relative to workDir for matching against repo-relative files
 			if m.workDir != "" && filepath.IsAbs(pattern) {
 				rel, err := filepath.Rel(m.workDir, pattern)
-				if err == nil && !strings.HasPrefix(rel, "..") && (f == rel || strings.HasSuffix(f, "/"+rel)) {
-					filtered = append(filtered, f)
-					break
+				if err == nil && !strings.HasPrefix(rel, "..") {
+					// normalize to forward slashes so the comparison works on Windows where
+					// filepath.Rel returns OS-native separators but git-style file paths use /
+					rel = filepath.ToSlash(rel)
+					if f == rel || strings.HasSuffix(f, "/"+rel) {
+						filtered = append(filtered, f)
+						break
+					}
 				}
 			}
 		}

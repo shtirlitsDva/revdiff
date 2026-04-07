@@ -3,6 +3,7 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,16 @@ import (
 	"github.com/umputun/revdiff/keymap"
 	"github.com/umputun/revdiff/ui/mocks"
 )
+
+// fakeAbsPath returns an absolute path on the current OS for use in tests
+// that exercise filepath.IsAbs / filepath.Rel branches without touching the
+// filesystem. On Unix it joins parts under "/", on Windows under "C:\\".
+func fakeAbsPath(parts ...string) string {
+	if runtime.GOOS == "windows" {
+		return `C:\` + strings.Join(parts, `\`)
+	}
+	return "/" + strings.Join(parts, "/")
+}
 
 func noopHighlighter() *mocks.SyntaxHighlighterMock {
 	return &mocks.SyntaxHighlighterMock{
@@ -6143,32 +6154,32 @@ func TestModel_FilterOnly(t *testing.T) {
 
 	t.Run("absolute path pattern resolved against workDir", func(t *testing.T) {
 		m := testModel(nil, nil)
-		m.only = []string{"/repo/README.md"}
-		m.workDir = "/repo"
+		m.only = []string{fakeAbsPath("repo", "README.md")}
+		m.workDir = fakeAbsPath("repo")
 		files := []string{"ui/model.go", "README.md"}
 		assert.Equal(t, []string{"README.md"}, m.filterOnly(files))
 	})
 
 	t.Run("absolute path pattern with subdirectory", func(t *testing.T) {
 		m := testModel(nil, nil)
-		m.only = []string{"/repo/ui/model.go"}
-		m.workDir = "/repo"
+		m.only = []string{fakeAbsPath("repo", "ui", "model.go")}
+		m.workDir = fakeAbsPath("repo")
 		files := []string{"ui/model.go", "diff/diff.go", "README.md"}
 		assert.Equal(t, []string{"ui/model.go"}, m.filterOnly(files))
 	})
 
 	t.Run("absolute path outside workDir does not match", func(t *testing.T) {
 		m := testModel(nil, nil)
-		m.only = []string{"/other/README.md"}
-		m.workDir = "/repo"
+		m.only = []string{fakeAbsPath("other", "README.md")}
+		m.workDir = fakeAbsPath("repo")
 		files := []string{"README.md", "ui/model.go"}
 		assert.Empty(t, m.filterOnly(files))
 	})
 
 	t.Run("absolute path suffix match via resolved relative", func(t *testing.T) {
 		m := testModel(nil, nil)
-		m.only = []string{"/repo/model.go"}
-		m.workDir = "/repo"
+		m.only = []string{fakeAbsPath("repo", "model.go")}
+		m.workDir = fakeAbsPath("repo")
 		files := []string{"ui/model.go", "diff/diff.go"}
 		assert.Equal(t, []string{"ui/model.go"}, m.filterOnly(files))
 	})
