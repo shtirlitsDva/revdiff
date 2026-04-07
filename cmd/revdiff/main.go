@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -91,6 +92,16 @@ func (o options) ref() string {
 var revision = "unknown"
 
 const defaultScratchBufferName = "scratch-buffer"
+
+// goosFn returns the current operating system identifier. it is overridable
+// in tests so that the cross-platform path helpers (defaultConfigPath,
+// defaultKeysPath, defaultThemesDir) can exercise both the windows and the
+// unix branches without relying on build tags.
+var goosFn = func() string { return runtime.GOOS }
+
+// userConfigDirFn wraps os.UserConfigDir so tests can stub the windows branch
+// of the path helpers without depending on the host's APPDATA environment.
+var userConfigDirFn = os.UserConfigDir
 
 func main() {
 	opts, err := parseArgs(os.Args[1:])
@@ -263,8 +274,18 @@ func resolveConfigPath(args []string) string {
 	return defaultConfigPath()
 }
 
-// defaultConfigPath returns ~/.config/revdiff/config.
+// defaultConfigPath returns the platform-specific default config file path.
+// on windows it resolves to %APPDATA%\revdiff\config via os.UserConfigDir().
+// on unix-like systems it preserves the historical ~/.config/revdiff/config
+// layout (intentionally not switching macOS to ~/Library/Application Support).
 func defaultConfigPath() string {
+	if goosFn() == "windows" {
+		dir, err := userConfigDirFn()
+		if err != nil {
+			return ""
+		}
+		return filepath.Join(dir, "revdiff", "config")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
@@ -291,8 +312,17 @@ func resolveKeysPath(args []string) string {
 	return defaultKeysPath()
 }
 
-// defaultKeysPath returns ~/.config/revdiff/keybindings.
+// defaultKeysPath returns the platform-specific default keybindings path.
+// on windows it resolves to %APPDATA%\revdiff\keybindings via os.UserConfigDir().
+// on unix-like systems it preserves the historical ~/.config/revdiff/keybindings layout.
 func defaultKeysPath() string {
+	if goosFn() == "windows" {
+		dir, err := userConfigDirFn()
+		if err != nil {
+			return ""
+		}
+		return filepath.Join(dir, "revdiff", "keybindings")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
@@ -514,8 +544,17 @@ func gitTopLevel() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// defaultThemesDir returns ~/.config/revdiff/themes.
+// defaultThemesDir returns the platform-specific default themes directory.
+// on windows it resolves to %APPDATA%\revdiff\themes via os.UserConfigDir().
+// on unix-like systems it preserves the historical ~/.config/revdiff/themes layout.
 func defaultThemesDir() string {
+	if goosFn() == "windows" {
+		dir, err := userConfigDirFn()
+		if err != nil {
+			return ""
+		}
+		return filepath.Join(dir, "revdiff", "themes")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
