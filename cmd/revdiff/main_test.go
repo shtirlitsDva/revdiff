@@ -191,13 +191,15 @@ func TestParseArgs_Blame(t *testing.T) {
 }
 
 func TestParseArgs_OutputFlag(t *testing.T) {
-	opts, err := parseArgs([]string{"-o", "/tmp/out.txt"})
+	out1 := filepath.Join(t.TempDir(), "out.txt")
+	opts, err := parseArgs([]string{"-o", out1})
 	require.NoError(t, err)
-	assert.Equal(t, "/tmp/out.txt", opts.Output)
+	assert.Equal(t, out1, opts.Output)
 
-	opts, err = parseArgs([]string{"--output=/tmp/out2.txt"})
+	out2 := filepath.Join(t.TempDir(), "out2.txt")
+	opts, err = parseArgs([]string{"--output=" + out2})
 	require.NoError(t, err)
-	assert.Equal(t, "/tmp/out2.txt", opts.Output)
+	assert.Equal(t, out2, opts.Output)
 }
 
 func TestParseArgs_Flags(t *testing.T) {
@@ -349,7 +351,8 @@ chroma-style = nord
 }
 
 func TestParseArgs_ConfigFileNotFound(t *testing.T) {
-	opts, err := parseArgs([]string{"--config", "/nonexistent/path/config"})
+	missingPath := filepath.Join(t.TempDir(), "nonexistent", "config")
+	opts, err := parseArgs([]string{"--config", missingPath})
 	require.NoError(t, err)
 	// should use defaults when config not found
 	assert.Equal(t, 4, opts.TabWidth)
@@ -655,9 +658,10 @@ func TestValidateStdinInput(t *testing.T) {
 }
 
 func TestParseArgs_KeysFlag(t *testing.T) {
-	opts, err := parseArgs(append(noConfigArgs(t), "--keys", "/custom/keybindings"))
+	customKeys := filepath.Join(t.TempDir(), "custom", "keybindings")
+	opts, err := parseArgs(append(noConfigArgs(t), "--keys", customKeys))
 	require.NoError(t, err)
-	assert.Equal(t, "/custom/keybindings", opts.Keys)
+	assert.Equal(t, customKeys, opts.Keys)
 }
 
 func TestParseArgs_KeysEqualsForm(t *testing.T) {

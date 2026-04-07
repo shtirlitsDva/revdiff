@@ -3,11 +3,30 @@ package diff
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// trySymlink creates a symlink and returns true on success. On Windows, symlink
+// creation requires SeCreateSymbolicLinkPrivilege (admin or Developer Mode); if
+// that privilege is missing, the test is skipped rather than failed because the
+// behavior under test is fundamentally about how revdiff handles symlinks that
+// already exist in a repo, not about whether Windows can create them.
+func trySymlink(t *testing.T, target, link string) bool {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		if runtime.GOOS == "windows" && strings.Contains(err.Error(), "privilege") {
+			t.Skipf("symlink creation requires elevation or Developer Mode on Windows: %v", err)
+			return false
+		}
+		require.NoError(t, err)
+	}
+	return true
+}
 
 func TestDirectoryReader_ChangedFiles(t *testing.T) {
 	dir := setupTestRepo(t)
@@ -115,7 +134,9 @@ func TestDirectoryReader_ChangedFiles_brokenSymlink(t *testing.T) {
 
 	// create a regular file and a symlink pointing to a nonexistent target
 	writeFile(t, dir, "real.go", "package main\n")
-	require.NoError(t, os.Symlink("/nonexistent/target", filepath.Join(dir, "broken.link")))
+	if !trySymlink(t, "/nonexistent/target", filepath.Join(dir, "broken.link")) {
+		return
+	}
 	gitCmd(t, dir, "add", ".")
 	gitCmd(t, dir, "commit", "-m", "initial")
 
@@ -131,7 +152,9 @@ func TestDirectoryReader_FileDiff_brokenSymlink(t *testing.T) {
 
 	// create a regular file and a broken symlink, commit both
 	writeFile(t, dir, "real.go", "package main\n")
-	require.NoError(t, os.Symlink("/nonexistent/target", filepath.Join(dir, "broken.link")))
+	if !trySymlink(t, "/nonexistent/target", filepath.Join(dir, "broken.link")) {
+		return
+	}
 	gitCmd(t, dir, "add", ".")
 	gitCmd(t, dir, "commit", "-m", "initial")
 
