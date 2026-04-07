@@ -110,9 +110,11 @@ try {
     }
 
     # -----------------------------------------------------------------------
-    # Spawn revdiff in a new WezTerm tab via `wezterm cli spawn --new-tab`.
-    # --pane-id anchors the new tab to the current WezTerm window.
-    # --cwd pins the spawned shell's working directory to our own.
+    # Spawn revdiff in a new WezTerm tab via `wezterm cli spawn`.
+    # New-tab-in-current-window is the DEFAULT behavior of `wezterm cli spawn`
+    # — there is no `--new-tab` flag; `--new-window` is the only override. So
+    # we just pass --pane-id (to anchor the new tab to our current window) and
+    # --cwd (to pin the spawned shell's working directory to our own).
     #
     # We wrap the call in cmd.exe so we can chain the sentinel-touch step after
     # revdiff exits. cmd /c "<cmd> & break>file" is the Windows analogue of
@@ -150,7 +152,6 @@ try {
 
     $wezArgs = @(
         'cli', 'spawn',
-        '--new-tab',
         '--pane-id', $weztermPane,
         '--cwd', $cwdForSpawn,
         '--',
