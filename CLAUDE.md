@@ -76,6 +76,22 @@ git diff → diff.ParseUnifiedDiff() → []DiffLine
 - ~30 `Action` constants in `keymap/keymap.go` (e.g., `ActionDown`, `ActionQuit`); modal text-entry keys (annotation input, search input, confirm discard) stay hardcoded; modal overlay navigation (annotation list, help) uses keymap for j/k/up/down but keeps `enter` and `esc` hardcoded
 - Help overlay is dynamically rendered from `m.keymap.HelpSections()`
 
+<windows>
+  <overview>
+    On Windows, `defaultConfigPath()`, `defaultKeysPath()`, and `defaultThemesDir()` route through `os.UserConfigDir()` (which returns `%APPDATA%`, typically `C:\Users\<you>\AppData\Roaming`) instead of `~/.config`. Unix paths are unchanged. All `--dump-config`, `--dump-keys`, `--dump-theme`, `--list-themes`, and `--init-themes` flows show the Windows locations automatically because they read from these helpers.
+    <paths>
+      - Config: `%APPDATA%\revdiff\config` (Unix: `~/.config/revdiff/config`)
+      - Keybindings: `%APPDATA%\revdiff\keybindings` (Unix: `~/.config/revdiff/keybindings`)
+      - Themes: `%APPDATA%\revdiff\themes\` (Unix: `~/.config/revdiff/themes/`)
+    </paths>
+    <notes>
+      - Path branching lives behind `runtime.GOOS == "windows"` checks in `cmd/revdiff/main.go`. TTY reattach for `--stdin` is split into build-tagged files (`tty_unix.go` uses `/dev/tty`, `tty_windows.go` uses `CONIN$`).
+      - When editing docs that reference `~/.config/revdiff/`, always mention the `%APPDATA%\revdiff\` equivalent in the same section so README.md, `site/docs.html`, and the plugin reference docs stay consistent.
+      - WezTerm is the only validated Windows terminal. Do not document cmd.exe, Windows Terminal, ConEmu, mintty, or WSL as supported — the PRD rules them out.
+    </notes>
+  </overview>
+</windows>
+
 ## Website
 - Static site in `site/` (index.html, docs.html, style.css), deployed to revdiff.com via Cloudflare Pages
 - `site/docs.html` must stay in sync with README.md - when adding features, flags, keybindings, or modes, update both

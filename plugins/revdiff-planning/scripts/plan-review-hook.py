@@ -12,6 +12,7 @@ returns PreToolUse hook JSON response with permissionDecision:
 requirements:
   - revdiff binary in PATH
   - tmux, kitty, wezterm, cmux, or ghostty (macOS) terminal
+    (on Windows: WezTerm only, via launch-plan-review.ps1)
 """
 
 import json
@@ -68,10 +69,34 @@ def main() -> None:
         make_response("ask", "revdiff not installed, skipping plan review")
         return
 
-    launcher = Path(plugin_root) / "scripts" / "launch-plan-review.sh"
-    if not launcher.exists():
-        make_response("ask", "launch-plan-review.sh not found")
-        return
+    # Platform dispatch: on Windows use the PowerShell sibling launch-plan-review.ps1
+    # (WezTerm only). On macOS/Linux the bash launcher remains the documented default
+    # and keeps full multi-terminal support (tmux/kitty/wezterm/cmux/ghostty/iTerm2/
+    # Emacs vterm). The two scripts accept the same positional argument signature:
+    # a single plan-file path.
+    scripts_dir = Path(plugin_root) / "scripts"
+    if sys.platform == "win32":
+        launcher = scripts_dir / "launch-plan-review.ps1"
+        if not launcher.exists():
+            make_response("ask", "launch-plan-review.ps1 not found")
+            return
+        # Prefer pwsh (PowerShell 7+) then fall back to Windows PowerShell 5.1.
+        pwsh_bin = shutil.which("pwsh") or shutil.which("powershell")
+        if not pwsh_bin:
+            make_response("ask", "PowerShell (pwsh or powershell) not found in PATH")
+            return
+        launcher_cmd = [
+            pwsh_bin,
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", str(launcher),
+        ]
+    else:
+        launcher = scripts_dir / "launch-plan-review.sh"
+        if not launcher.exists():
+            make_response("ask", "launch-plan-review.sh not found")
+            return
+        launcher_cmd = [str(launcher)]
 
     # write plan to temp file
     with tempfile.NamedTemporaryFile(
@@ -82,7 +107,7 @@ def main() -> None:
 
     try:
         result = subprocess.run(
-            [str(launcher), str(tmp_path)],
+            [*launcher_cmd, str(tmp_path)],
             capture_output=True, text=True, timeout=345600,
             env={**os.environ},
         )

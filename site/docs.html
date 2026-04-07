@@ -104,6 +104,14 @@
         <div class="code-block"><code>go install github.com/umputun/revdiff/cmd/revdiff@latest</code></div>
         <h3>Binary releases</h3>
         <p>Download from <a href="https://github.com/umputun/revdiff/releases">GitHub Releases</a> &mdash; deb, rpm, archives for linux/darwin amd64/arm64.</p>
+        <h3>Windows</h3>
+        <p>revdiff supports Windows 10/11 with <a href="https://wezfurlong.org/wezterm/">WezTerm</a> as the validated terminal. Other Windows terminals (cmd.exe, Windows Terminal, ConEmu, mintty) are not tested and may have rendering issues.</p>
+        <p>Install via Go from PowerShell:</p>
+        <div class="code-block"><code>go install github.com/umputun/revdiff/cmd/revdiff@latest</code></div>
+        <p>This produces <code>revdiff.exe</code> under <code>%USERPROFILE%\go\bin</code> (or wherever <code>%GOPATH%\bin</code> points). Make sure that directory is on your <code>PATH</code>.</p>
+        <p>Or build from a local checkout:</p>
+        <div class="code-block"><code>.\build.ps1</code></div>
+        <p>This produces <code>.bin\revdiff.exe</code>. Run the test suite with <code>.\test.ps1</code>. <code>git</code> must be on <code>PATH</code> for diff, blame, and ref-detection features to work.</p>
 
         <!-- usage -->
         <h2 id="usage">Usage</h2>
@@ -199,6 +207,19 @@ revdiff --only=/tmp/draft-comment.md</code></div>
         <p>Precedence: CLI flags &gt; env vars &gt; config file &gt; built-in defaults.</p>
         <div class="code-block"><code>mkdir -p ~/.config/revdiff
 revdiff --dump-config > ~/.config/revdiff/config</code></div>
+        <h3>Windows paths</h3>
+        <p>On Windows, configuration lives under <code>%APPDATA%\revdiff\</code> (resolved via <code>os.UserConfigDir()</code>, typically <code>C:\Users\&lt;you&gt;\AppData\Roaming\revdiff\</code>). <code>--dump-config</code>, <code>--dump-keys</code>, <code>--dump-theme</code>, <code>--list-themes</code>, and <code>--init-themes</code> all reference the Windows locations automatically.</p>
+        <table>
+            <thead><tr><th>Resource</th><th>Unix path</th><th>Windows path</th></tr></thead>
+            <tbody>
+                <tr><td>Config</td><td><code>~/.config/revdiff/config</code></td><td><code>%APPDATA%\revdiff\config</code></td></tr>
+                <tr><td>Keybindings</td><td><code>~/.config/revdiff/keybindings</code></td><td><code>%APPDATA%\revdiff\keybindings</code></td></tr>
+                <tr><td>Themes</td><td><code>~/.config/revdiff/themes/</code></td><td><code>%APPDATA%\revdiff\themes\</code></td></tr>
+            </tbody>
+        </table>
+        <p>Generate a default config on Windows (PowerShell):</p>
+        <div class="code-block"><code>New-Item -ItemType Directory -Force -Path "$env:APPDATA\revdiff" | Out-Null
+revdiff --dump-config | Out-File -Encoding ascii "$env:APPDATA\revdiff\config"</code></div>
 
         <h2 id="options">Options</h2>
         <table>
@@ -387,6 +408,7 @@ unmap q</code></div>
             </tbody>
         </table>
         <p>Priority: tmux &rarr; kitty &rarr; wezterm/kaku &rarr; cmux &rarr; ghostty &rarr; iTerm2 &rarr; Emacs vterm (first detected wins). cmux is checked before ghostty because it also sets <code>$TERM_PROGRAM=ghostty</code>. iTerm2 uses a split pane rather than a full-screen overlay.</p>
+        <p><strong>Windows:</strong> Both the <code>revdiff</code> and <code>revdiff-planning</code> plugins work on Windows under WezTerm. The Windows launcher uses <code>wezterm cli spawn --new-tab</code> to open revdiff in a new tab of the current WezTerm window. WezTerm is the only supported terminal on Windows &mdash; cmd.exe, Windows Terminal, ConEmu, and mintty are not validated.</p>
 
         <h2 id="plugin-usage">Plugin usage</h2>
         <h3>Slash commands</h3>

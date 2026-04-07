@@ -50,6 +50,26 @@ go install github.com/umputun/revdiff/cmd/revdiff@latest
 
 **Binary releases:** download from [GitHub Releases](https://github.com/umputun/revdiff/releases) (deb, rpm, archives for linux/darwin amd64/arm64).
 
+### Windows
+
+revdiff supports Windows 10/11 with [WezTerm](https://wezfurlong.org/wezterm/) as the validated terminal. Other Windows terminals (cmd.exe, Windows Terminal, ConEmu, mintty) are not tested and may have rendering issues.
+
+Install via Go:
+
+```powershell
+go install github.com/umputun/revdiff/cmd/revdiff@latest
+```
+
+This produces `revdiff.exe` under `%USERPROFILE%\go\bin` (or wherever `%GOPATH%\bin` points). Make sure that directory is on your `PATH`.
+
+Or build from a local checkout with PowerShell:
+
+```powershell
+.\build.ps1
+```
+
+This produces `.bin\revdiff.exe`. Run the test suite with `.\test.ps1`. `git` must be on `PATH` for diff, blame, and ref-detection features to work.
+
 ## Claude Code Plugin
 
 revdiff ships with a Claude Code plugin for interactive code review directly from a Claude session. The plugin launches revdiff as a terminal overlay, captures annotations, and feeds them back to Claude for processing.
@@ -72,6 +92,8 @@ Priority: tmux → kitty → wezterm/Kaku → cmux → ghostty → iTerm2 → Em
 > **Note:** cmux is detected before ghostty because cmux also sets `$TERM_PROGRAM=ghostty`. The cmux block uses the cmux CLI (`new-split` + `send --surface`) instead of Ghostty's AppleScript API.
 
 > **Note:** iTerm2 uses a split pane (vertical or horizontal, auto-detected from terminal dimensions) rather than a full-screen overlay. The iTerm2 AppleScript API does not expose a zoom command, so the split view shares screen space with the invoking session.
+
+> **Windows:** Both the `revdiff` and `revdiff-planning` plugins work on Windows under WezTerm. The Windows launcher uses `wezterm cli spawn --new-tab` to open revdiff in a new tab of the current WezTerm window. WezTerm is the only supported terminal on Windows — cmd.exe, Windows Terminal, ConEmu, and mintty are not validated.
 
 **Install:**
 
@@ -198,6 +220,21 @@ revdiff --dump-config > ~/.config/revdiff/config
 ```
 
 Then uncomment and edit the values you want to change.
+
+**Windows paths:** on Windows, configuration lives under `%APPDATA%\revdiff\` (resolved via `os.UserConfigDir()`, typically `C:\Users\<you>\AppData\Roaming\revdiff\`). `--dump-config`, `--dump-keys`, `--dump-theme`, `--list-themes`, and `--init-themes` all reference the Windows locations automatically.
+
+| Resource    | Unix path                       | Windows path                    |
+|-------------|---------------------------------|---------------------------------|
+| Config      | `~/.config/revdiff/config`      | `%APPDATA%\revdiff\config`      |
+| Keybindings | `~/.config/revdiff/keybindings` | `%APPDATA%\revdiff\keybindings` |
+| Themes      | `~/.config/revdiff/themes/`     | `%APPDATA%\revdiff\themes\`     |
+
+Generate a default config on Windows (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:APPDATA\revdiff" | Out-Null
+revdiff --dump-config | Out-File -Encoding ascii "$env:APPDATA\revdiff\config"
+```
 
 ### Themes
 

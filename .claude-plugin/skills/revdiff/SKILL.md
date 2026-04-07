@@ -87,8 +87,19 @@ Run the launcher script:
 ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.sh [base] [against] [--staged] [--only=file1] [--all-files] [--exclude=prefix]
 ```
 
+**Platform dispatch**: on Windows use the PowerShell sibling `launch-revdiff.ps1` instead (WezTerm only). The bash launcher above is the documented default on macOS and Linux. Same applies to `detect-ref.sh` → `detect-ref.ps1`. Select the correct launcher like this:
+
+```bash
+# PowerShell 6+: $IsWindows is built-in; on Windows PowerShell 5.1 fall back to OSVersion.
+if ($IsWindows -or [System.Environment]::OSVersion.Platform -eq 'Win32NT') {
+    & "$env:CLAUDE_PLUGIN_ROOT/.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1" @args
+} else {
+    "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.sh" "$@"
+}
+```
+
 The script:
-- Detects available terminal (tmux → kitty → wezterm/Kaku → cmux → ghostty → iTerm2 → Emacs vterm)
+- Detects available terminal (tmux → kitty → wezterm/Kaku → cmux → ghostty → iTerm2 → Emacs vterm on POSIX; WezTerm only on Windows)
 - Launches revdiff in an overlay
 - Captures annotation output to a temp file
 - Prints captured annotations to stdout
