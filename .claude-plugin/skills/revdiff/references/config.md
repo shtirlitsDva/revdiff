@@ -14,6 +14,22 @@ revdiff --dump-config > ~/.config/revdiff/config
 
 Then uncomment and edit the values you want to change.
 
+### Windows paths
+
+On Windows, configuration lives under `%APPDATA%\revdiff\` (resolved via `os.UserConfigDir()`, typically `C:\Users\<you>\AppData\Roaming\revdiff\`). `--dump-config`, `--dump-keys`, `--dump-theme`, `--list-themes`, and `--init-themes` all reference the Windows locations automatically.
+
+| Resource    | Unix path                       | Windows path                    |
+|-------------|---------------------------------|---------------------------------|
+| Config      | `~/.config/revdiff/config`      | `%APPDATA%\revdiff\config`      |
+| Keybindings | `~/.config/revdiff/keybindings` | `%APPDATA%\revdiff\keybindings` |
+| Themes      | `~/.config/revdiff/themes/`     | `%APPDATA%\revdiff\themes\`     |
+
+Generate a default config on Windows (PowerShell):
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:APPDATA\revdiff" | Out-Null
+revdiff --dump-config | Out-File -Encoding ascii "$env:APPDATA\revdiff\config"
+```
+
 ## Options
 
 | Option | Env var | Description | Default |
