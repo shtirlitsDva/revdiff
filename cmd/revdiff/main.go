@@ -325,10 +325,13 @@ func stdinName(name string) string {
 	return name
 }
 
+// openTTY opens the controlling terminal for interactive TUI input. the
+// platform-specific device path lives in tty_unix.go and tty_windows.go so
+// the literal "/dev/tty" / "CONIN$" never leaks into main.go.
 func openTTY() (*os.File, error) {
-	tty, err := os.Open("/dev/tty")
+	tty, err := openInteractiveTTY()
 	if err != nil {
-		return nil, fmt.Errorf("open /dev/tty: %w", err)
+		return nil, fmt.Errorf("open interactive tty: %w", err)
 	}
 	return tty, nil
 }
