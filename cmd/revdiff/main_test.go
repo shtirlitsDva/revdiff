@@ -422,9 +422,7 @@ func TestResolveConfigPath_ArgsOverrideEnv(t *testing.T) {
 func TestResolveConfigPath_Default(t *testing.T) {
 	t.Setenv("REVDIFF_CONFIG", "") // clear env
 	path := resolveConfigPath([]string{})
-	home, err := os.UserHomeDir()
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(home, ".config", "revdiff", "config"), path)
+	assert.Equal(t, defaultConfigPath(), path)
 }
 
 func TestDumpConfig(t *testing.T) {
@@ -441,9 +439,13 @@ func TestDumpConfig(t *testing.T) {
 
 func TestDefaultConfigPath(t *testing.T) {
 	path := defaultConfigPath()
-	assert.Contains(t, path, ".config")
 	assert.Contains(t, path, "revdiff")
 	assert.Contains(t, path, "config")
+	// the historical ~/.config layout is preserved on every non-windows host;
+	// windows uses %APPDATA%\revdiff\config which has no .config segment.
+	if goosFn() != "windows" {
+		assert.Contains(t, path, ".config")
+	}
 }
 
 func TestMakeRenderer_GitWithOnly(t *testing.T) {
@@ -695,16 +697,18 @@ func TestResolveKeysPath_ArgsOverrideEnv(t *testing.T) {
 func TestResolveKeysPath_Default(t *testing.T) {
 	t.Setenv("REVDIFF_KEYS", "") // clear env
 	path := resolveKeysPath([]string{})
-	home, err := os.UserHomeDir()
-	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(home, ".config", "revdiff", "keybindings"), path)
+	assert.Equal(t, defaultKeysPath(), path)
 }
 
 func TestDefaultKeysPath(t *testing.T) {
 	path := defaultKeysPath()
-	assert.Contains(t, path, ".config")
 	assert.Contains(t, path, "revdiff")
 	assert.Contains(t, path, "keybindings")
+	// the historical ~/.config layout is preserved on every non-windows host;
+	// windows uses %APPDATA%\revdiff\keybindings which has no .config segment.
+	if goosFn() != "windows" {
+		assert.Contains(t, path, ".config")
+	}
 }
 
 func TestGitTopLevel(t *testing.T) {
@@ -1070,7 +1074,159 @@ func TestHandleThemes_NoOp(t *testing.T) {
 
 func TestDefaultThemesDir(t *testing.T) {
 	dir := defaultThemesDir()
-	assert.Contains(t, dir, ".config")
 	assert.Contains(t, dir, "revdiff")
 	assert.Contains(t, dir, "themes")
+	// the historical ~/.config layout is preserved on every non-windows host;
+	// windows uses %APPDATA%\revdiff\themes which has no .config segment.
+	if goosFn() != "windows" {
+		assert.Contains(t, dir, ".config")
+	}
+}
+
+// withStubbedPlatform overrides goosFn and userConfigDirFn for the duration
+// of a test, restoring the originals via t.Cleanup. it lets the cross-platform
+// path helpers exercise both the windows and the unix branches without build
+// tags or environment manipulation.
+func withStubbedPlatform(t *testing.T, goos string, configDir string, configErr error) {
+	t.Helper()
+	prevGoos := goosFn
+	prevConfigDir := userConfigDirFn
+	t.Cleanup(func() {
+		goosFn = prevGoos
+		userConfigDirFn = prevConfigDir
+	})
+	goosFn = func() string { return goos }
+	userConfigDirFn = func() (string, error) { return configDir, configErr }
+}
+
+func TestDefaultConfigPath_PerPlatform(t *testing.T) {
+	tests := []struct {
+		name      string
+		goos      string
+		configDir string
+		configErr error
+		want      string // empty means "compare to ~/.config/revdiff/config"
+	}{
+		{
+			name:      "windows uses APPDATA via os.UserConfigDir",
+			goos:      "windows",
+			configDir: `C:\Users\test\AppData\Roaming`,
+			want:      filepath.Join(`C:\Users\test\AppData\Roaming`, "revdiff", "config"),
+		},
+		{
+			name:      "windows returns empty when UserConfigDir fails",
+			goos:      "windows",
+			configErr: errors.New("no APPDATA"),
+			want:      "",
+		},
+		{
+			name: "linux preserves ~/.config layout",
+			goos: "linux",
+		},
+		{
+			name: "darwin preserves ~/.config layout (not Library)",
+			goos: "darwin",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			withStubbedPlatform(t, tc.goos, tc.configDir, tc.configErr)
+			got := defaultConfigPath()
+			if tc.want != "" || tc.configErr != nil {
+				assert.Equal(t, tc.want, got)
+				return
+			}
+			home, err := os.UserHomeDir()
+			require.NoError(t, err)
+			assert.Equal(t, filepath.Join(home, ".config", "revdiff", "config"), got)
+		})
+	}
+}
+
+func TestDefaultKeysPath_PerPlatform(t *testing.T) {
+	tests := []struct {
+		name      string
+		goos      string
+		configDir string
+		configErr error
+		want      string
+	}{
+		{
+			name:      "windows uses APPDATA via os.UserConfigDir",
+			goos:      "windows",
+			configDir: `C:\Users\test\AppData\Roaming`,
+			want:      filepath.Join(`C:\Users\test\AppData\Roaming`, "revdiff", "keybindings"),
+		},
+		{
+			name:      "windows returns empty when UserConfigDir fails",
+			goos:      "windows",
+			configErr: errors.New("no APPDATA"),
+			want:      "",
+		},
+		{
+			name: "linux preserves ~/.config layout",
+			goos: "linux",
+		},
+		{
+			name: "darwin preserves ~/.config layout (not Library)",
+			goos: "darwin",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			withStubbedPlatform(t, tc.goos, tc.configDir, tc.configErr)
+			got := defaultKeysPath()
+			if tc.want != "" || tc.configErr != nil {
+				assert.Equal(t, tc.want, got)
+				return
+			}
+			home, err := os.UserHomeDir()
+			require.NoError(t, err)
+			assert.Equal(t, filepath.Join(home, ".config", "revdiff", "keybindings"), got)
+		})
+	}
+}
+
+func TestDefaultThemesDir_PerPlatform(t *testing.T) {
+	tests := []struct {
+		name      string
+		goos      string
+		configDir string
+		configErr error
+		want      string
+	}{
+		{
+			name:      "windows uses APPDATA via os.UserConfigDir",
+			goos:      "windows",
+			configDir: `C:\Users\test\AppData\Roaming`,
+			want:      filepath.Join(`C:\Users\test\AppData\Roaming`, "revdiff", "themes"),
+		},
+		{
+			name:      "windows returns empty when UserConfigDir fails",
+			goos:      "windows",
+			configErr: errors.New("no APPDATA"),
+			want:      "",
+		},
+		{
+			name: "linux preserves ~/.config layout",
+			goos: "linux",
+		},
+		{
+			name: "darwin preserves ~/.config layout (not Library)",
+			goos: "darwin",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			withStubbedPlatform(t, tc.goos, tc.configDir, tc.configErr)
+			got := defaultThemesDir()
+			if tc.want != "" || tc.configErr != nil {
+				assert.Equal(t, tc.want, got)
+				return
+			}
+			home, err := os.UserHomeDir()
+			require.NoError(t, err)
+			assert.Equal(t, filepath.Join(home, ".config", "revdiff", "themes"), got)
+		})
+	}
 }
