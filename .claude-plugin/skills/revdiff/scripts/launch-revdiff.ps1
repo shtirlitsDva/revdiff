@@ -27,8 +27,9 @@
 #                           width is ignored here too.
 #
 # Fork-only launcher flags (NOT revdiff flags — intercepted by this script):
-#   --view=<path>  Plain-file view mode. The launcher pipes the file through
-#                  `type "<path>" | revdiff --stdin --stdin-name=<basename>`
+#   --view=<path>  Plain-file view mode. The launcher feeds the file to revdiff
+#                  via OS stdin redirection — effectively:
+#                      revdiff --stdin --stdin-name=<basename> < "<path>"
 #                  so revdiff renders the file as a context-only scratch buffer
 #                  regardless of its git state. Required because revdiff's
 #                  `--only=<path>` only filters git diff output; tracked-clean
@@ -195,18 +196,27 @@ try {
     #      possible since we control the values, except for ForwardedArgs
     #      which we also wrap in quotes; cmd.exe's double-quote rules are
     #      lenient enough that this is safe for normal ref names and paths).
-    #      In --view mode this line is prefixed with `type "<file>" |` so
-    #      the file content is piped into revdiff's stdin.
+    #      In --view mode this line gets a `< "<file>"` suffix so the file
+    #      is fed to revdiff's stdin via OS file redirection.
+    #      DELIBERATELY not `type "<file>" | revdiff …`: the pipe spawns an
+    #      intermediate `type` subshell whose teardown after revdiff exits
+    #      interacts poorly with WezTerm's exit_behavior, leaving the split
+    #      pane in a "press any key" state. `< file` avoids the subshell.
     #   2. break > <sentinel> to signal completion (atomic empty-file create).
     # @echo off keeps cmd from echoing each command to the pane.
     $revdiffLine = '"' + $revdiffBin + '" ' + (($revdiffArgs | ForEach-Object { '"' + $_ + '"' }) -join ' ')
     if ($null -ne $viewAbs) {
-        $revdiffLine = 'type "' + $viewAbs + '" | ' + $revdiffLine
+        $revdiffLine = $revdiffLine + ' < "' + $viewAbs + '"'
     }
+    # `exit 0` explicitly terminates cmd.exe with success code so WezTerm's
+    # exit_behavior closes the pane cleanly. Without it, cmd.exe's implicit
+    # exit inherits the last command's status, which can trip a hold under
+    # `CloseOnCleanExit`-style configs even when nothing actually failed.
     $cmdScriptLines = @(
         '@echo off'
         $revdiffLine
         'break > "' + $sentinelFile + '"'
+        'exit 0'
     )
 
     $cmdScriptFile = [System.IO.Path]::GetTempFileName() + '.cmd'

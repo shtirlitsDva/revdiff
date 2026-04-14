@@ -769,8 +769,8 @@ func (m Model) handleFileLoaded(msg fileLoadedMsg) (tea.Model, tea.Cmd) {
 	m.scrollX = 0
 	m.collapsed.expandedHunks = make(map[int]bool)
 
-	// detect markdown full-context mode and build TOC
-	if m.singleFile && m.isMarkdownFile(msg.file) && m.isFullContext(msg.lines) {
+	// detect full-context doc mode (markdown or XML) and build TOC
+	if m.singleFile && m.isTOCEligibleFile(msg.file) && m.isFullContext(msg.lines) {
 		m.mdTOC = parseTOC(msg.lines, msg.file)
 	} else {
 		m.mdTOC = nil

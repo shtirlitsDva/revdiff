@@ -463,7 +463,7 @@ func TestModel_IsFullContext(t *testing.T) {
 	}
 }
 
-func TestModel_IsMarkdownFile(t *testing.T) {
+func TestModel_IsTOCEligibleFile(t *testing.T) {
 	m := &Model{}
 	tests := []struct {
 		name string
@@ -472,17 +472,308 @@ func TestModel_IsMarkdownFile(t *testing.T) {
 	}{
 		{name: ".md", file: "README.md", want: true},
 		{name: ".markdown", file: "notes.markdown", want: true},
+		{name: ".xml", file: "data.xml", want: true},
+		{name: ".xhtml", file: "page.xhtml", want: true},
 		{name: ".go", file: "main.go", want: false},
+		{name: ".py", file: "script.py", want: false},
+		{name: ".sh", file: "run.sh", want: false},
+		{name: ".html NOT included", file: "page.html", want: false},
+		{name: ".txt NOT included", file: "notes.txt", want: false},
 		{name: ".MD uppercase", file: "README.MD", want: true},
 		{name: ".MARKDOWN uppercase", file: "DOC.MARKDOWN", want: true},
+		{name: ".XML uppercase", file: "DATA.XML", want: true},
+		{name: ".XHTML uppercase", file: "PAGE.XHTML", want: true},
 		{name: "no extension", file: "Makefile", want: false},
 		{name: "path with .md", file: "docs/guide.md", want: true},
+		{name: "path with .xml", file: "schemas/user.xml", want: true},
 		{name: "empty", file: "", want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, m.isMarkdownFile(tt.file))
+			assert.Equal(t, tt.want, m.isTOCEligibleFile(tt.file))
+		})
+	}
+}
+
+func TestParseTOC_XmlHeadings(t *testing.T) {
+	tests := []struct {
+		name    string
+		lines   []diff.DiffLine
+		wantNil bool
+		want    []tocEntry
+	}{
+		{name: "single XML open/close", lines: []diff.DiffLine{
+			{Content: "<overview>", ChangeType: diff.ChangeContext},
+			{Content: "body text", ChangeType: diff.ChangeContext},
+			{Content: "</overview>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "overview", level: 1, lineIdx: 0},
+		}},
+		{name: "nested XML headings", lines: []diff.DiffLine{
+			{Content: "<outer>", ChangeType: diff.ChangeContext},
+			{Content: "<inner>", ChangeType: diff.ChangeContext},
+			{Content: "<deepest>", ChangeType: diff.ChangeContext},
+			{Content: "</deepest>", ChangeType: diff.ChangeContext},
+			{Content: "</inner>", ChangeType: diff.ChangeContext},
+			{Content: "</outer>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "outer", level: 1, lineIdx: 0},
+			{title: "inner", level: 2, lineIdx: 1},
+			{title: "deepest", level: 3, lineIdx: 2},
+		}},
+		{name: "siblings reset to same level after close", lines: []diff.DiffLine{
+			{Content: "<section-a>", ChangeType: diff.ChangeContext},
+			{Content: "<nested>", ChangeType: diff.ChangeContext},
+			{Content: "</nested>", ChangeType: diff.ChangeContext},
+			{Content: "</section-a>", ChangeType: diff.ChangeContext},
+			{Content: "<section-b>", ChangeType: diff.ChangeContext},
+			{Content: "</section-b>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "section-a", level: 1, lineIdx: 0},
+			{title: "nested", level: 2, lineIdx: 1},
+			{title: "section-b", level: 1, lineIdx: 4},
+		}},
+		{name: "attributes ignored in title", lines: []diff.DiffLine{
+			{Content: `<example type="good">`, ChangeType: diff.ChangeContext},
+			{Content: "</example>", ChangeType: diff.ChangeContext},
+			{Content: `<section-name id="foo" data-thing="bar">`, ChangeType: diff.ChangeContext},
+			{Content: "</section-name>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "example", level: 1, lineIdx: 0},
+			{title: "section-name", level: 1, lineIdx: 2},
+		}},
+		{name: "self-closing tags ignored", lines: []diff.DiffLine{
+			{Content: "<section>", ChangeType: diff.ChangeContext},
+			{Content: "<br/>", ChangeType: diff.ChangeContext},
+			{Content: `<img src="x.png"/>`, ChangeType: diff.ChangeContext},
+			{Content: "</section>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "section", level: 1, lineIdx: 0},
+		}},
+		{name: "mismatched close pops to matching open", lines: []diff.DiffLine{
+			{Content: "<a>", ChangeType: diff.ChangeContext},
+			{Content: "<b>", ChangeType: diff.ChangeContext},
+			{Content: "<c>", ChangeType: diff.ChangeContext},
+			{Content: "</a>", ChangeType: diff.ChangeContext}, // closes all 3
+			{Content: "<d>", ChangeType: diff.ChangeContext},  // now level 1 again
+			{Content: "</d>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "a", level: 1, lineIdx: 0},
+			{title: "b", level: 2, lineIdx: 1},
+			{title: "c", level: 3, lineIdx: 2},
+			{title: "d", level: 1, lineIdx: 4},
+		}},
+		{name: "bogus close with no matching open silently ignored", lines: []diff.DiffLine{
+			{Content: "<a>", ChangeType: diff.ChangeContext},
+			{Content: "</nonexistent>", ChangeType: diff.ChangeContext}, // ignored
+			{Content: "<b>", ChangeType: diff.ChangeContext},            // still nested inside <a>
+			{Content: "</b>", ChangeType: diff.ChangeContext},
+			{Content: "</a>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "a", level: 1, lineIdx: 0},
+			{title: "b", level: 2, lineIdx: 2},
+		}},
+		{name: "unclosed open tag leaves later headers nested", lines: []diff.DiffLine{
+			{Content: "<outer>", ChangeType: diff.ChangeContext},
+			// never closes
+			{Content: "<inner>", ChangeType: diff.ChangeContext},
+			{Content: "</inner>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "outer", level: 1, lineIdx: 0},
+			{title: "inner", level: 2, lineIdx: 1},
+		}},
+		{name: "inline XML on same line as text ignored", lines: []diff.DiffLine{
+			{Content: "Use <foo> to denote <bar> like so.", ChangeType: diff.ChangeContext},
+			{Content: "prefix <section>", ChangeType: diff.ChangeContext},
+			{Content: "<section> suffix", ChangeType: diff.ChangeContext},
+			{Content: "<section>", ChangeType: diff.ChangeContext}, // this one counts
+			{Content: "</section>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "section", level: 1, lineIdx: 3},
+		}},
+		{name: "HTML comments not treated as tags", lines: []diff.DiffLine{
+			{Content: "<!-- a comment -->", ChangeType: diff.ChangeContext},
+			{Content: "<!--", ChangeType: diff.ChangeContext},
+			{Content: "-->", ChangeType: diff.ChangeContext},
+			{Content: "<real>", ChangeType: diff.ChangeContext},
+			{Content: "</real>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "real", level: 1, lineIdx: 3},
+		}},
+		{name: "doctype and processing instructions ignored", lines: []diff.DiffLine{
+			{Content: "<!DOCTYPE html>", ChangeType: diff.ChangeContext},
+			{Content: `<?xml version="1.0"?>`, ChangeType: diff.ChangeContext},
+			{Content: "<real>", ChangeType: diff.ChangeContext},
+			{Content: "</real>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "real", level: 1, lineIdx: 2},
+		}},
+		{name: "mixed hash and XML headings", lines: []diff.DiffLine{
+			{Content: "# Top Section", ChangeType: diff.ChangeContext},
+			{Content: "<outer>", ChangeType: diff.ChangeContext},
+			{Content: "## Inside Outer", ChangeType: diff.ChangeContext}, // absolute level 2
+			{Content: "<inner>", ChangeType: diff.ChangeContext},         // stack depth 2 → level 2
+			{Content: "</inner>", ChangeType: diff.ChangeContext},
+			{Content: "</outer>", ChangeType: diff.ChangeContext},
+			{Content: "# Another Top", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "Top Section", level: 1, lineIdx: 0},
+			{title: "outer", level: 1, lineIdx: 1},
+			{title: "Inside Outer", level: 2, lineIdx: 2},
+			{title: "inner", level: 2, lineIdx: 3},
+			{title: "Another Top", level: 1, lineIdx: 6},
+		}},
+		{name: "level capped at 6 for very deep XML nesting", lines: []diff.DiffLine{
+			{Content: "<l1>", ChangeType: diff.ChangeContext},
+			{Content: "<l2>", ChangeType: diff.ChangeContext},
+			{Content: "<l3>", ChangeType: diff.ChangeContext},
+			{Content: "<l4>", ChangeType: diff.ChangeContext},
+			{Content: "<l5>", ChangeType: diff.ChangeContext},
+			{Content: "<l6>", ChangeType: diff.ChangeContext},
+			{Content: "<l7>", ChangeType: diff.ChangeContext}, // clamped to level 6
+			{Content: "<l8>", ChangeType: diff.ChangeContext}, // clamped to level 6
+		}, want: []tocEntry{
+			{title: "l1", level: 1, lineIdx: 0},
+			{title: "l2", level: 2, lineIdx: 1},
+			{title: "l3", level: 3, lineIdx: 2},
+			{title: "l4", level: 4, lineIdx: 3},
+			{title: "l5", level: 5, lineIdx: 4},
+			{title: "l6", level: 6, lineIdx: 5},
+			{title: "l7", level: 6, lineIdx: 6},
+			{title: "l8", level: 6, lineIdx: 7},
+		}},
+		{name: "XML inside backtick fence excluded", lines: []diff.DiffLine{
+			{Content: "<real>", ChangeType: diff.ChangeContext},
+			{Content: "```", ChangeType: diff.ChangeContext},
+			{Content: "<fake-one>", ChangeType: diff.ChangeContext},
+			{Content: "</fake-one>", ChangeType: diff.ChangeContext},
+			{Content: "<fake-two>", ChangeType: diff.ChangeContext},
+			{Content: "```", ChangeType: diff.ChangeContext},
+			{Content: "</real>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "real", level: 1, lineIdx: 0},
+		}},
+		{name: "XML inside tilde fence excluded", lines: []diff.DiffLine{
+			{Content: "<real>", ChangeType: diff.ChangeContext},
+			{Content: "~~~", ChangeType: diff.ChangeContext},
+			{Content: "<fake>", ChangeType: diff.ChangeContext},
+			{Content: "</fake>", ChangeType: diff.ChangeContext},
+			{Content: "~~~", ChangeType: diff.ChangeContext},
+			{Content: "</real>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "real", level: 1, lineIdx: 0},
+		}},
+		{name: "XML inside language-tagged fence excluded", lines: []diff.DiffLine{
+			{Content: "<real>", ChangeType: diff.ChangeContext},
+			{Content: "```xml", ChangeType: diff.ChangeContext},
+			{Content: "<fake-xml>", ChangeType: diff.ChangeContext},
+			{Content: "</fake-xml>", ChangeType: diff.ChangeContext},
+			{Content: "```", ChangeType: diff.ChangeContext},
+			{Content: "</real>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "real", level: 1, lineIdx: 0},
+		}},
+		{name: "fake close inside fence does not pop outer stack", lines: []diff.DiffLine{
+			{Content: "<outer>", ChangeType: diff.ChangeContext},
+			{Content: "```", ChangeType: diff.ChangeContext},
+			{Content: "</outer>", ChangeType: diff.ChangeContext}, // ignored — inside fence
+			{Content: "```", ChangeType: diff.ChangeContext},
+			{Content: "<inner>", ChangeType: diff.ChangeContext}, // still nested in outer
+			{Content: "</inner>", ChangeType: diff.ChangeContext},
+			{Content: "</outer>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "outer", level: 1, lineIdx: 0},
+			{title: "inner", level: 2, lineIdx: 4},
+		}},
+		{name: "4-space-indented XML treated as code block", lines: []diff.DiffLine{
+			{Content: "<real>", ChangeType: diff.ChangeContext},
+			{Content: "    <fake-indented>", ChangeType: diff.ChangeContext},
+			{Content: "    </fake-indented>", ChangeType: diff.ChangeContext},
+			{Content: "</real>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "real", level: 1, lineIdx: 0},
+		}},
+		{name: "tab-indented XML treated as code block", lines: []diff.DiffLine{
+			{Content: "<real>", ChangeType: diff.ChangeContext},
+			{Content: "\t<fake-tab>", ChangeType: diff.ChangeContext},
+			{Content: "\t</fake-tab>", ChangeType: diff.ChangeContext},
+			{Content: "</real>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "real", level: 1, lineIdx: 0},
+		}},
+		{name: "1-to-3 space indent still counts as heading", lines: []diff.DiffLine{
+			{Content: " <one-space>", ChangeType: diff.ChangeContext},
+			{Content: " </one-space>", ChangeType: diff.ChangeContext},
+			{Content: "  <two-space>", ChangeType: diff.ChangeContext},
+			{Content: "  </two-space>", ChangeType: diff.ChangeContext},
+			{Content: "   <three-space>", ChangeType: diff.ChangeContext},
+			{Content: "   </three-space>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "one-space", level: 1, lineIdx: 0},
+			{title: "two-space", level: 1, lineIdx: 2},
+			{title: "three-space", level: 1, lineIdx: 4},
+		}},
+		{name: "hyphen and underscore in tag names accepted", lines: []diff.DiffLine{
+			{Content: "<my-section>", ChangeType: diff.ChangeContext},
+			{Content: "<sub_part>", ChangeType: diff.ChangeContext},
+			{Content: "</sub_part>", ChangeType: diff.ChangeContext},
+			{Content: "</my-section>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "my-section", level: 1, lineIdx: 0},
+			{title: "sub_part", level: 2, lineIdx: 1},
+		}},
+		{name: "divider lines skipped in XML sections", lines: []diff.DiffLine{
+			{Content: "<a>", ChangeType: diff.ChangeContext},
+			{Content: "", ChangeType: diff.ChangeDivider},
+			{Content: "<b>", ChangeType: diff.ChangeContext},
+			{Content: "</b>", ChangeType: diff.ChangeContext},
+			{Content: "</a>", ChangeType: diff.ChangeContext},
+		}, want: []tocEntry{
+			{title: "a", level: 1, lineIdx: 0},
+			{title: "b", level: 2, lineIdx: 2},
+		}},
+	}
+
+	topEntry := tocEntry{title: "test.md", level: 1, lineIdx: 0}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseTOC(tt.lines, "test.md")
+			if tt.wantNil {
+				assert.Nil(t, got)
+				return
+			}
+			require.NotNil(t, got)
+			wantWithTop := append([]tocEntry{topEntry}, tt.want...)
+			assert.Equal(t, wantWithTop, got.entries)
+		})
+	}
+}
+
+func TestIsIndentedCodeLine(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "empty", in: "", want: false},
+		{name: "zero leading space", in: "hello", want: false},
+		{name: "1 space", in: " hello", want: false},
+		{name: "2 spaces", in: "  hello", want: false},
+		{name: "3 spaces", in: "   hello", want: false},
+		{name: "exactly 4 spaces", in: "    hello", want: true},
+		{name: "5 spaces", in: "     hello", want: true},
+		{name: "8 spaces", in: "        deep", want: true},
+		{name: "single tab", in: "\thello", want: true},
+		{name: "tab after spaces", in: "  \there", want: true},
+		{name: "all spaces whitespace-only", in: "    ", want: true},
+		{name: "all-whitespace shorter than 4", in: "   ", want: false},
+		{name: "tab-only whitespace", in: "\t", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isIndentedCodeLine(tt.in))
 		})
 	}
 }
