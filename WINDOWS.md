@@ -28,6 +28,55 @@ required at runtime.
 
 </overview>
 
+<fork-versioning>
+
+<overview>
+
+Plugin `version` fields in `.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json` follow SemVer 2.0.0 build-metadata
+suffixes to signal fork divergence from upstream:
+
+```
+<upstream-version>+win.<N>
+```
+
+Examples: `0.6.0+win.1`, `0.6.0+win.2`, then `0.7.0+win.1` after
+the next upstream catch-up.
+
+</overview>
+
+<rules>
+
+1. **Pin to the upstream version we diverged from.** When we're in
+   sync with upstream `0.6.0`, our fork versions are `0.6.0+win.N`.
+2. **Bump `N` on every fork-only change** that touches plugin
+   files (`.claude-plugin/...`, `plugins/.../scripts/*.ps1`, etc.).
+   Start at `+win.1`; no gaps, no skips.
+3. **Reset `N` to 1 after merging upstream.** When we pull
+   upstream `0.7.0`, the next fork release becomes `0.7.0+win.1`,
+   not `0.7.0+win.<old+1>`.
+4. **Do NOT bump when merging upstream without fork edits.** A pure
+   upstream sync should adopt upstream's version verbatim — the
+   `+win.N` suffix is reserved for changes that originate in this
+   fork.
+5. **Per-plugin counters.** `revdiff` and `revdiff-planning` have
+   independent `N` counters; bumping one does not bump the other.
+
+</rules>
+
+<rationale>
+
+SemVer treats `+` as build metadata — ignored for version
+precedence, so tooling still considers `0.6.0+win.1` equivalent to
+upstream `0.6.0` for dependency resolution. Humans and marketplace
+listings see the suffix, so "the fork has moved" is visible without
+claiming a version number that collides with upstream's release
+track.
+
+</rationale>
+
+</fork-versioning>
+
 <new-files>
 
 <overview>
