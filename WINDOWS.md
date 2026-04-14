@@ -133,7 +133,12 @@ These are sibling files — the bash launchers are untouched.
 - `.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1` —
   Windows sibling of `launch-revdiff.sh`. Spawns revdiff in a
   WezTerm split pane for the main revdiff plugin's "review diff"
-  flow. Added in commit `658d21d` (Issue #4).
+  flow. Added in commit `658d21d` (Issue #4). This launcher also
+  carries a **fork-only `--view=<path>` flag** (not present in the
+  bash sibling) which pipes the named file into `revdiff --stdin
+  --stdin-name=<basename>`, enabling plain-file annotation mode
+  even for tracked-clean files that `--only` cannot render. Added
+  after this file's initial landing.
 - `plugins/revdiff-planning/scripts/launch-plan-review.ps1` —
   Windows sibling of `launch-plan-review.sh`. Spawns revdiff in a
   WezTerm split pane so the user can review a plan file during

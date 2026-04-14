@@ -52,10 +52,11 @@ If not found, guide installation:
 - Skip ref detection entirely, go directly to Step 2
 - Example: "all files exclude vendor" → `--all-files --exclude=vendor`
 
-**File review mode**: If `$ARGUMENTS` is a file path (e.g., `docs/plans/feature.md`, `/tmp/notes.txt`):
+**File view mode**: If `$ARGUMENTS` is a file path (e.g., `docs/plans/feature.md`, `/tmp/notes.txt`, or any tracked file the user wants to annotate inline):
 - Skip ref detection entirely
-- Go directly to Step 2 with `--only=<filepath>` (no ref argument)
-- Works both inside and outside a git repo — revdiff reads the file from disk as context-only
+- Go directly to Step 2
+- **On Windows/WezTerm**: pass `--view=<filepath>`. The PS1 launcher intercepts this fork-only flag and pipes the file to `revdiff --stdin --stdin-name=<basename>`, so the file renders as a context-only scratch buffer **regardless of git state** — tracked-clean files work, untracked files work, files outside any repo work.
+- **On macOS/Linux**: pass `--only=<filepath>`. The bash launcher does NOT support `--view`; `--only` is the documented fallback but only renders the file if git is unavailable or the file is untracked — tracked-clean files will show "no files match --only filter". If you hit that, pipe the file via `cat <file> | revdiff --stdin --stdin-name=<basename> --output=<out>` manually (launcher wrapping is a TODO on POSIX).
 
 **Ref mode**: If `$ARGUMENTS` contains explicit ref(s) (e.g., `HEAD~1`, `main`, or `main feature` for two-ref diff), use as-is.
 
@@ -87,7 +88,7 @@ Run the launcher script:
 ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.sh [base] [against] [--staged] [--only=file1] [--all-files] [--exclude=prefix]
 ```
 
-**Platform dispatch**: on Windows use the PowerShell sibling `launch-revdiff.ps1` instead (WezTerm only). The bash launcher above is the documented default on macOS and Linux. Same applies to `detect-ref.sh` → `detect-ref.ps1`. Select the correct launcher like this:
+**Platform dispatch**: on Windows use the PowerShell sibling `launch-revdiff.ps1` instead (WezTerm only). The bash launcher above is the documented default on macOS and Linux. Same applies to `detect-ref.sh` → `detect-ref.ps1`. The PS1 launcher accepts all bash flags plus a fork-only `--view=<path>` (see File view mode above). Select the correct launcher like this:
 
 ```bash
 # PowerShell 6+: $IsWindows is built-in; on Windows PowerShell 5.1 fall back to OSVersion.

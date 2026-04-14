@@ -26,7 +26,19 @@
 #                           bash wezterm branch uses only height for --percent, so
 #                           width is ignored here too.
 #
-# See also: launch-revdiff.sh (POSIX sibling, keep logic in sync).
+# Fork-only launcher flags (NOT revdiff flags — intercepted by this script):
+#   --view=<path>  Plain-file view mode. The launcher pipes the file through
+#                  `type "<path>" | revdiff --stdin --stdin-name=<basename>`
+#                  so revdiff renders the file as a context-only scratch buffer
+#                  regardless of its git state. Required because revdiff's
+#                  `--only=<path>` only filters git diff output; tracked-clean
+#                  files produce no diff and show "no files match". The upstream
+#                  bash launcher does NOT understand --view — adding it there
+#                  risks merge conflicts with upstream. Use --view only through
+#                  this PS1 launcher.
+#
+# See also: launch-revdiff.sh (POSIX sibling, keep logic in sync except for
+# the fork-only --view flag documented above).
 
 # param() must precede any executable statements (including Set-StrictMode).
 # Accept all forwarded arguments as a single array; PowerShell binds positional
@@ -94,11 +106,41 @@ $cmdScriptFile = $null
 
 try {
     # -----------------------------------------------------------------------
+    # Intercept the fork-only --view=<path> flag BEFORE building the revdiff
+    # command line. See the docstring at the top of this file for rationale.
+    # Everything else in ForwardedArgs is forwarded unchanged to revdiff.
+    # -----------------------------------------------------------------------
+    $viewFile = $null
+    $filteredArgs = @()
+    foreach ($a in $ForwardedArgs) {
+        if ($a -like '--view=*') {
+            $viewFile = $a.Substring('--view='.Length)
+        } else {
+            $filteredArgs += $a
+        }
+    }
+
+    $viewAbs  = $null
+    $viewName = $null
+    if ($null -ne $viewFile) {
+        if (-not (Test-Path -LiteralPath $viewFile -PathType Leaf)) {
+            throw "--view file not found: $viewFile"
+        }
+        # Resolve to absolute backslash path — cmd.exe's `type` is picky about
+        # forward-slash Windows paths and we want --stdin-name to render cleanly.
+        $viewAbs  = (Resolve-Path -LiteralPath $viewFile).ProviderPath
+        $viewName = Split-Path -Leaf $viewAbs
+    }
+
+    # -----------------------------------------------------------------------
     # Build the revdiff command line that will run inside the split pane.
     #
     # revdiff forwarded args come from the caller; we always append
     # --output=<outputFile> and, if REVDIFF_CONFIG points to an existing file,
-    # --config=<path> (matches the bash block).
+    # --config=<path> (matches the bash block). In --view mode we also append
+    # --stdin and --stdin-name=<basename> so revdiff treats the piped content
+    # as a named scratch buffer (preserves filename for the tree + syntax
+    # highlighting keyed on extension).
     # -----------------------------------------------------------------------
     $revdiffArgs = @()
 
@@ -107,8 +149,14 @@ try {
     }
 
     $revdiffArgs += "--output=$outputFile"
-    if ($ForwardedArgs.Count -gt 0) {
-        $revdiffArgs += $ForwardedArgs
+
+    if ($null -ne $viewAbs) {
+        $revdiffArgs += '--stdin'
+        $revdiffArgs += "--stdin-name=$viewName"
+    }
+
+    if ($filteredArgs.Count -gt 0) {
+        $revdiffArgs += $filteredArgs
     }
 
     # -----------------------------------------------------------------------
@@ -147,11 +195,17 @@ try {
     #      possible since we control the values, except for ForwardedArgs
     #      which we also wrap in quotes; cmd.exe's double-quote rules are
     #      lenient enough that this is safe for normal ref names and paths).
+    #      In --view mode this line is prefixed with `type "<file>" |` so
+    #      the file content is piped into revdiff's stdin.
     #   2. break > <sentinel> to signal completion (atomic empty-file create).
     # @echo off keeps cmd from echoing each command to the pane.
+    $revdiffLine = '"' + $revdiffBin + '" ' + (($revdiffArgs | ForEach-Object { '"' + $_ + '"' }) -join ' ')
+    if ($null -ne $viewAbs) {
+        $revdiffLine = 'type "' + $viewAbs + '" | ' + $revdiffLine
+    }
     $cmdScriptLines = @(
         '@echo off'
-        '"' + $revdiffBin + '" ' + (($revdiffArgs | ForEach-Object { '"' + $_ + '"' }) -join ' ')
+        $revdiffLine
         'break > "' + $sentinelFile + '"'
     )
 
