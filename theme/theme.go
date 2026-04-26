@@ -24,7 +24,7 @@ type Theme struct {
 	Colors      map[string]string // keys include the "color-" prefix, matching ini-name tags exactly (e.g. "color-accent")
 }
 
-// colorKeys is the ordered list of all 21 recognized color keys matching ini-name tags.
+// colorKeys is the ordered list of all recognized color keys matching ini-name tags.
 var colorKeys = []string{
 	"color-accent", "color-border", "color-normal", "color-muted",
 	"color-selected-fg", "color-selected-bg",
@@ -36,14 +36,17 @@ var colorKeys = []string{
 	"color-tree-bg", "color-diff-bg",
 	"color-status-fg", "color-status-bg",
 	"color-search-fg", "color-search-bg",
+	"color-table-code",
 }
 
 // optionalColorKeys lists color keys that may be omitted from theme files.
-// these correspond to CLI flags with no default value (terminal background is used instead).
+// these correspond to CLI flags with no default value (terminal background is
+// used instead) OR features that gracefully degrade when the color is absent.
 var optionalColorKeys = map[string]bool{
-	"color-cursor-bg": true,
-	"color-tree-bg":   true,
-	"color-diff-bg":   true,
+	"color-cursor-bg":  true,
+	"color-tree-bg":    true,
+	"color-diff-bg":    true,
+	"color-table-code": true, // markdown-table inline code falls back to plain text
 }
 
 // ColorKeys returns the ordered list of recognized color key names.

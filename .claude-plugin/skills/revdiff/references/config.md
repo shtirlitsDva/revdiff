@@ -111,6 +111,7 @@ All color options accept hex values (`#rrggbb`) and have corresponding `REVDIFF_
 | `--color-status-bg` | Status bar background | `#C5794F` |
 | `--color-search-fg` | Search match text | `#1a1a1a` |
 | `--color-search-bg` | Search match background | `#4a4a00` |
+| `--color-table-code` | Markdown table inline `code` text | `#87afd7` |
 
 ## Chroma Syntax Highlighting Styles
 

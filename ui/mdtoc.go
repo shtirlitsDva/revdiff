@@ -166,29 +166,6 @@ func parseTOC(lines []diff.DiffLine, filename string) *mdTOC {
 	return &mdTOC{entries: entries, activeSection: -1}
 }
 
-// isIndentedCodeLine reports whether a line's leading whitespace makes it a
-// CommonMark indented code block: 4+ leading spaces, or a leading tab. Lines
-// that are purely whitespace return false so blank lines don't mask real
-// content ahead.
-func isIndentedCodeLine(s string) bool {
-	spaces := 0
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		switch ch {
-		case ' ':
-			spaces++
-			if spaces >= 4 {
-				return true
-			}
-		case '\t':
-			return true
-		default:
-			return false
-		}
-	}
-	return false
-}
-
 // moveUp moves cursor to the previous entry, clamped to first entry.
 func (toc *mdTOC) moveUp() {
 	if toc.cursor > 0 {
@@ -285,26 +262,6 @@ func (toc *mdTOC) truncateTitle(title string, maxWidth int) string {
 		return "…"
 	}
 	return string(runes[:maxWidth-1]) + "…"
-}
-
-// fencePrefix returns the fence character ('`' or '~') and count of leading consecutive
-// occurrences. Returns (0, 0) if the string doesn't start with backticks or tildes.
-func fencePrefix(s string) (rune, int) {
-	if s == "" {
-		return 0, 0
-	}
-	ch := rune(s[0])
-	if ch != '`' && ch != '~' {
-		return 0, 0
-	}
-	n := 0
-	for _, r := range s {
-		if r != ch {
-			break
-		}
-		n++
-	}
-	return ch, n
 }
 
 // isFullContext returns true when all lines are ChangeContext (skips ChangeDivider).

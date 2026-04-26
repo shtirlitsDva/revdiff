@@ -455,9 +455,9 @@ func TestDump_Parse_roundtrip_withoutOptionalKeys(t *testing.T) {
 
 func TestColorKeys(t *testing.T) {
 	keys := ColorKeys()
-	assert.Len(t, keys, 21)
+	assert.Len(t, keys, 22)
 	assert.Equal(t, "color-accent", keys[0])
-	assert.Equal(t, "color-search-bg", keys[len(keys)-1])
+	assert.Equal(t, "color-table-code", keys[len(keys)-1])
 
 	// verify it returns a copy
 	keys[0] = "modified"
@@ -466,10 +466,11 @@ func TestColorKeys(t *testing.T) {
 
 func TestOptionalColorKeys(t *testing.T) {
 	opt := OptionalColorKeys()
-	assert.Len(t, opt, 3)
+	assert.Len(t, opt, 4)
 	assert.True(t, opt["color-cursor-bg"])
 	assert.True(t, opt["color-tree-bg"])
 	assert.True(t, opt["color-diff-bg"])
+	assert.True(t, opt["color-table-code"])
 
 	// verify it returns a copy
 	opt["color-accent"] = true

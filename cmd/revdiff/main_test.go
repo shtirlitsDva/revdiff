@@ -890,18 +890,20 @@ func TestCollectColors(t *testing.T) {
 	assert.Equal(t, "#D5895F", colors["color-accent"])
 	assert.Equal(t, "#585858", colors["color-border"])
 	assert.Equal(t, "#87d787", colors["color-add-fg"])
-	// 3 optional keys (cursor-bg, tree-bg, diff-bg) have no default and are omitted
-	assert.Len(t, colors, 18)
+	// 3 optional keys (cursor-bg, tree-bg, diff-bg) have no default and are omitted.
+	// color-table-code is also optional but DOES have a default, so it appears.
+	assert.Len(t, colors, 19)
 	assert.Empty(t, colors["color-cursor-bg"])
 	assert.Empty(t, colors["color-tree-bg"])
 	assert.Empty(t, colors["color-diff-bg"])
+	assert.Equal(t, "#87afd7", colors["color-table-code"])
 }
 
 func TestColorFieldPtrs(t *testing.T) {
-	t.Run("returns 21 entries matching theme.ColorKeys", func(t *testing.T) {
+	t.Run("returns 22 entries matching theme.ColorKeys", func(t *testing.T) {
 		opts := options{}
 		ptrs := colorFieldPtrs(&opts)
-		assert.Len(t, ptrs, 21)
+		assert.Len(t, ptrs, 22)
 		for _, key := range theme.ColorKeys() {
 			_, ok := ptrs[key]
 			assert.True(t, ok, "missing key %q in colorFieldPtrs", key)

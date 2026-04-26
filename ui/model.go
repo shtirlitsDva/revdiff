@@ -75,6 +75,8 @@ type Model struct {
 
 	highlighter        SyntaxHighlighter // syntax highlighter
 	highlightedLines   []string          // pre-computed highlighted content, parallel to diffLines
+	tableFormatted     []string          // pre-computed markdown-table reformatted content, parallel to diffLines (empty = no override)
+	tableMode          bool              // true when markdown table reformatting is enabled
 	diffLines          []diff.DiffLine   // current file's parsed diff lines
 	currFile           string            // currently displayed file
 	loadSeq            uint64            // monotonic counter to identify the latest load request
@@ -330,7 +332,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEnterKey()
 	case keymap.ActionAnnotateFile:
 		return m.handleFileAnnotateKey()
-	case keymap.ActionToggleCollapsed, keymap.ActionToggleWrap, keymap.ActionToggleTree, keymap.ActionToggleLineNums, keymap.ActionToggleBlame:
+	case keymap.ActionToggleCollapsed, keymap.ActionToggleWrap, keymap.ActionToggleTree, keymap.ActionToggleLineNums, keymap.ActionToggleBlame, keymap.ActionToggleTable:
 		return m.handleViewToggle(action)
 	default: // remaining actions (navigation, search, etc.) handled by pane-specific handlers below
 	}
@@ -442,6 +444,8 @@ func (m Model) handleViewToggle(action keymap.Action) (tea.Model, tea.Cmd) {
 	case keymap.ActionToggleBlame:
 		cmd := m.toggleBlame()
 		return m, cmd
+	case keymap.ActionToggleTable:
+		m.toggleTableMode()
 	}
 	return m, nil
 }
@@ -497,7 +501,39 @@ func (m *Model) toggleWrapMode() {
 	if m.wrapMode {
 		m.scrollX = 0
 	}
+	// wrap mode disables table reformatting (alignment + soft-wrap is incoherent).
+	// recompute either way so toggling wrap clears or restores the formatted slice.
+	m.recomputeTableFormatted()
 	m.syncViewportToCursor()
+}
+
+// toggleTableMode toggles markdown-table reformatting on/off and recomputes
+// the parallel tableFormatted slice. Mirrors the wrap/blame/lineNumbers toggle
+// pattern.
+func (m *Model) toggleTableMode() {
+	if m.focus != paneDiff || m.currFile == "" {
+		return
+	}
+	m.tableMode = !m.tableMode
+	m.recomputeTableFormatted()
+	m.syncViewportToCursor()
+}
+
+// recomputeTableFormatted (re)builds m.tableFormatted from the current
+// diffLines. Clears the slice when tableMode is off or wrapMode is on.
+func (m *Model) recomputeTableFormatted() {
+	if !m.tableMode || m.wrapMode || len(m.diffLines) == 0 {
+		m.tableFormatted = nil
+		return
+	}
+	m.tableFormatted = BuildTableFormatted(m.diffLines, m.ansiFg(m.styles.colors.TableCode))
+}
+
+// isMarkdownFile reports whether a filename has a markdown extension. Used to
+// auto-default tableMode on at file load.
+func isMarkdownFile(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return ext == ".md" || ext == ".markdown"
 }
 
 // loadSelectedIfChanged ensures the tree is visible and loads the selected file if it changed.
@@ -762,6 +798,10 @@ func (m Model) handleFileLoaded(msg fileLoadedMsg) (tea.Model, tea.Cmd) {
 	m.clearSearch()
 	m.computeFileStats()
 	m.highlightedLines = m.highlighter.HighlightLines(msg.file, msg.lines)
+	// auto-enable table mode for markdown files on load. recompute either way
+	// so a stale slice from a previous file doesn't bleed into the new one.
+	m.tableMode = isMarkdownFile(msg.file)
+	m.recomputeTableFormatted()
 	if m.lineNumbers {
 		m.lineNumWidth = m.computeLineNumWidth()
 	}
@@ -1229,7 +1269,8 @@ func (m Model) ansiFg(hex string) string { return m.ansiColor(hex, 38) }
 // ansiBg returns an ANSI 24-bit background escape sequence for a hex color.
 func (m Model) ansiBg(hex string) string { return m.ansiColor(hex, 48) }
 
-// statusModeIcons returns combined mode indicator icons (▼ collapsed, ◉ filter, ↩ wrap, ≋ search).
+// statusModeIcons returns combined mode indicator icons (▼ collapsed, ◉ filter,
+// ↩ wrap, ≋ search, ⊟ tree-hidden, # line-numbers, b blame, ▦ md-tables).
 // all icons are always shown; active modes use status foreground, inactive use muted color.
 func (m Model) statusModeIcons() string {
 	type indicator struct {
@@ -1244,6 +1285,7 @@ func (m Model) statusModeIcons() string {
 		{"⊟", m.treeHidden},
 		{"#", m.lineNumbers},
 		{"b", m.showBlame},
+		{"▦", m.tableMode},
 	}
 
 	statusFg := m.styles.colors.Muted

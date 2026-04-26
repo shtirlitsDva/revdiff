@@ -284,8 +284,17 @@ func (m Model) wrapContent(content string, width int) []string {
 
 // prepareLineContent returns the display-ready content for a diff line with tabs replaced.
 // returns the raw line content, the best available content (highlighted if available), and whether highlight was used.
+//
+// markdown table reformatting (tableFormatted) takes precedence over chroma
+// highlighting when set for this line — table cells are rendered with our own
+// inline markdown ANSI rather than chroma's lexer output.
 func (m Model) prepareLineContent(idx int, dl diff.DiffLine) (lineContent, textContent string, hasHighlight bool) {
 	lineContent = strings.ReplaceAll(dl.Content, "\t", m.tabSpaces)
+	if idx < len(m.tableFormatted) && m.tableFormatted[idx] != "" {
+		// formatter already produced display-ready content; treat as highlighted
+		// so styleDiffContent uses the highlight branch (preserving inner ANSI).
+		return lineContent, m.tableFormatted[idx], true
+	}
 	hasHighlight = idx < len(m.highlightedLines)
 	textContent = lineContent
 	if hasHighlight {

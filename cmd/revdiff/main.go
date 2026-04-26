@@ -77,6 +77,7 @@ type options struct {
 		StatusBg   string `long:"color-status-bg"   ini-name:"color-status-bg"   env:"REVDIFF_COLOR_STATUS_BG"   default:"#C5794F" description:"status bar background"`
 		SearchFg   string `long:"color-search-fg"   ini-name:"color-search-fg"   env:"REVDIFF_COLOR_SEARCH_FG"   default:"#1a1a1a" description:"search match foreground"`
 		SearchBg   string `long:"color-search-bg"   ini-name:"color-search-bg"   env:"REVDIFF_COLOR_SEARCH_BG"   default:"#4a4a00" description:"search match background"`
+		TableCode  string `long:"color-table-code"  ini-name:"color-table-code"  env:"REVDIFF_COLOR_TABLE_CODE"  default:"#87afd7" description:"markdown table inline code text color"`
 	} `group:"color options"`
 }
 
@@ -459,6 +460,7 @@ func run(opts options) error {
 			StatusBg:   opts.Colors.StatusBg,
 			SearchFg:   opts.Colors.SearchFg,
 			SearchBg:   opts.Colors.SearchBg,
+			TableCode:  opts.Colors.TableCode,
 		},
 	})
 
@@ -651,6 +653,7 @@ func colorFieldPtrs(opts *options) map[string]*string {
 		"color-status-bg":   &opts.Colors.StatusBg,
 		"color-search-fg":   &opts.Colors.SearchFg,
 		"color-search-bg":   &opts.Colors.SearchBg,
+		"color-table-code":  &opts.Colors.TableCode,
 	}
 }
 

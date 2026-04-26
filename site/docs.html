@@ -62,6 +62,7 @@
         <a href="#context-only">Context-only review</a>
         <a href="#scratch-buffer">Scratch-buffer review</a>
         <a href="#markdown-toc">Markdown TOC</a>
+        <a href="#markdown-tables">Markdown tables</a>
         <a href="#beyond-code-review">Beyond code review</a>
 
         <h4>Configuration</h4>
@@ -193,6 +194,11 @@ git show HEAD~1:README.md | revdiff --stdin --stdin-name README.md</code></div>
         <h2 id="markdown-toc">Markdown TOC navigation</h2>
         <p>When reviewing a single markdown file in context-only mode, a table-of-contents pane appears on the left listing all markdown headers. This works for <code>--only</code> files and for <code>--stdin</code> when <code>--stdin-name</code> ends with <code>.md</code> or <code>.markdown</code>. Use <code>Tab</code> to switch focus, <code>j</code>/<code>k</code> to navigate, <code>Enter</code> to jump. The TOC highlights the current section as you scroll. Headers inside fenced code blocks are excluded.</p>
 
+        <h2 id="markdown-tables">Markdown table rendering</h2>
+        <p>GFM-style markdown tables are reformatted in place with column-aligned cells and Unicode box-drawing borders. Cells render inline markdown: <code>**bold**</code>, <code>*italic*</code>, <code>`code`</code> (colored via <code>--color-table-code</code>), and <code>[text](url)</code> (URL stripped, text kept). Alignment markers (<code>:---</code>, <code>:---:</code>, <code>---:</code>) are honored. Tables work in both diff mode and full-file viewing — added/removed rows in a diff align to the same grid as context rows.</p>
+        <p>Default-on for <code>.md</code> and <code>.markdown</code> files. Toggle with <code>T</code>. Suppressed when wrap mode is on. Tables inside fenced or indented code blocks are left as raw source. Status bar icon: <code>▦</code>.</p>
+        <p><strong>Search caveat:</strong> reformatted tables replace ASCII <code>|</code> with <code>│</code>, so a literal-pipe search will miss inside formatted tables. Toggle off with <code>T</code> to restore raw view if you need to search for pipes.</p>
+
         <h2 id="beyond-code-review">Beyond code review</h2>
         <p>The <code>--only</code> and <code>--stdin</code> flags enable use cases beyond git diffs. Files and ephemeral command output can both be loaded for annotation, no git repo required.</p>
         <p><strong>Reviewing AI-generated drafts</strong> — When an AI assistant drafts text to be posted publicly (PR comments, issue responses, release notes), write it to a temp file and review in revdiff. Annotate specific lines, the assistant rewrites, re-open to verify.</p>
@@ -295,6 +301,7 @@ color-border = #6272a4
                 <tr><td><code>--color-modify-fg/bg</code></td><td>Modified line (collapsed mode)</td><td><code>#f5c542</code> / <code>#3D2E00</code></td></tr>
                 <tr><td><code>--color-status-fg/bg</code></td><td>Status bar</td><td><code>#202020</code> / <code>#C5794F</code></td></tr>
                 <tr><td><code>--color-search-fg/bg</code></td><td>Search matches</td><td><code>#1a1a1a</code> / <code>#4a4a00</code></td></tr>
+                <tr><td><code>--color-table-code</code></td><td>Markdown table inline <code>code</code> text</td><td><code>#87afd7</code></td></tr>
                 <tr><td><code>--color-tree-bg</code></td><td>File tree background</td><td>terminal default</td></tr>
                 <tr><td><code>--color-diff-bg</code></td><td>Diff pane background</td><td>terminal default</td></tr>
             </tbody>
@@ -359,6 +366,7 @@ color-border = #6272a4
                 <tr><td><code>t</code></td><td>Toggle tree/TOC pane visibility</td></tr>
                 <tr><td><code>L</code></td><td>Toggle line numbers</td></tr>
                 <tr><td><code>B</code></td><td>Toggle git blame gutter (author + commit age)</td></tr>
+                <tr><td><code>T</code></td><td>Toggle markdown table reformatting (default-on for .md files)</td></tr>
                 <tr><td><code>.</code></td><td>Expand/collapse hunk (collapsed mode)</td></tr>
                 <tr><td><code>f</code></td><td>Filter: all files / annotated only</td></tr>
                 <tr><td><code>?</code></td><td>Help overlay</td></tr>

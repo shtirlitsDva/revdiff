@@ -110,6 +110,7 @@ Use `--stdin` to review arbitrary piped or redirected text as one synthetic file
 | `t` | Toggle tree/TOC pane visibility (gives diff full terminal width) |
 | `L` | Toggle line numbers (side-by-side old/new numbers in gutter) |
 | `B` | Toggle git blame gutter (author name + commit age per line) |
+| `T` | Toggle markdown table reformatting (column-aligned cells; default-on for `.md` files) |
 | `.` | Expand/collapse individual hunk under cursor (collapsed mode only) |
 | `f` | Toggle filter: all files / annotated only |
 | `?` | Toggle help overlay showing all keybindings |

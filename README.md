@@ -22,6 +22,7 @@ Built for a specific use case: reviewing code changes, plans, and documents with
 - Status line with filename, diff stats, hunk position, line number, and mode indicators
 - Help overlay (`?`) showing all keybindings organized by section
 - Markdown TOC navigation: single-file markdown files in context-only mode show a table-of-contents pane with header navigation and active section tracking
+- Markdown table rendering: column-aligned cells with Unicode box-drawing borders, inline `**bold**`/`*italic*`/`` `code` `` rendered, default-on for `.md` files, toggle with `T`
 - All-files mode: browse and annotate all git-tracked files with `--all-files`, filter with `--exclude`
 - No-git file review: `--only` files outside a git repo (or not in any diff) are shown as context-only with full annotation support
 - Scratch-buffer review: annotate arbitrary piped or redirected text with `--stdin`, optionally naming it with `--stdin-name`
@@ -306,6 +307,7 @@ All color options accept hex values (`#rrggbb`) and have corresponding `REVDIFF_
 | `--color-status-bg` | Status bar background | `#C5794F` |
 | `--color-search-fg` | Search match text | `#1a1a1a` |
 | `--color-search-bg` | Search match background | `#4a4a00` |
+| `--color-table-code` | Markdown table inline `code` text | `#87afd7` |
 
 </details>
 
@@ -476,6 +478,7 @@ revdiff --only=/tmp/draft-comment.md
 | `t` | Toggle tree/TOC pane visibility (gives diff full terminal width) |
 | `L` | Toggle line numbers (side-by-side old/new numbers in gutter) |
 | `B` | Toggle git blame gutter (author name + commit age per line) |
+| `T` | Toggle markdown table reformatting (column-aligned cells, default-on for `.md` files) |
 | `.` | Expand/collapse individual hunk under cursor (collapsed mode only) |
 | `f` | Toggle filter: all files / annotated only (shown when annotations exist) |
 | `?` | Toggle help overlay showing all keybindings |

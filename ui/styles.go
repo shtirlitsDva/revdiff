@@ -25,6 +25,7 @@ type Colors struct {
 	StatusBg   string // status bar background
 	SearchFg   string // search match foreground
 	SearchBg   string // search match background
+	TableCode  string // markdown table inline `code` foreground
 }
 
 // styles holds all lipgloss styles used in the TUI.
@@ -97,6 +98,7 @@ func normalizeColors(c Colors) Colors {
 	c.StatusBg = normalizeColor(c.StatusBg)
 	c.SearchFg = normalizeColor(c.SearchFg)
 	c.SearchBg = normalizeColor(c.SearchBg)
+	c.TableCode = normalizeColor(c.TableCode)
 	return c
 }
 
