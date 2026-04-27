@@ -88,22 +88,42 @@ Run the launcher script:
 ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.sh [base] [against] [--staged] [--only=file1] [--all-files] [--exclude=prefix]
 ```
 
-**Platform dispatch**: on Windows use the PowerShell sibling `launch-revdiff.ps1` instead (WezTerm only). The bash launcher above is the documented default on macOS and Linux. Same applies to `detect-ref.sh` → `detect-ref.ps1`. The PS1 launcher accepts all bash flags plus a fork-only `--view=<path>` (see File view mode above). Select the correct launcher like this:
+**Platform dispatch**: on Windows use the PowerShell sibling `launch-revdiff.ps1` instead (WezTerm only). The bash launcher above is the documented default on macOS and Linux. Same applies to `detect-ref.sh` → `detect-ref.ps1`. The PS1 launcher accepts all bash flags plus a fork-only `--view=<path>` (see File view mode above).
+
+**The launcher owns the output file. NEVER pass `--output=` or `-o` yourself** — the launcher creates a temp file, passes it to revdiff, waits for the TUI to exit, then streams the captured annotations to stdout. Caller-supplied `--output` is rejected with a hard error.
+
+**Canonical Monitor invocation — macOS / Linux (bash):**
 
 ```bash
-# PowerShell 6+: $IsWindows is built-in; on Windows PowerShell 5.1 fall back to OSVersion.
-if ($IsWindows -or [System.Environment]::OSVersion.Platform -eq 'Win32NT') {
-    & "$env:CLAUDE_PLUGIN_ROOT/.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1" @args
-} else {
-    "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.sh" "$@"
-}
+"${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.sh" [args...]
 ```
 
-The script:
+Pass to `Monitor` with `persistent: true`. The launcher blocks until revdiff exits; its stdout is the annotation stream.
+
+**Canonical Monitor invocation — Windows (calling pwsh from a bash Monitor):**
+
+```bash
+pwsh -NoProfile -Command "& '<PLUGIN_ROOT>/.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1' '<arg1>' '<arg2>' ..."
+```
+
+Critical rules for the Windows form:
+- Use `pwsh -Command`, **NOT** `pwsh -File`. With `-File`, pwsh's argument binder mangles Windows paths containing `:` (e.g. `--view=H:/foo` becomes `--view=H` and the rest is dropped). `-Command` with a single-quoted call operator avoids this.
+- Single-quote every argument inside the `-Command` string. Single quotes are PowerShell literals — no escaping of `\`, `:`, or `=` needed inside them.
+- Either backslash or forward-slash paths work *inside* the single quotes; pick one and stick with it.
+- Pass `persistent: true` and **no `timeout_ms`** to `Monitor`. Reviews can take arbitrarily long; a timed-out Monitor loses every annotation written after it fires.
+
+Working example for `--view` mode on Windows:
+
+```bash
+pwsh -NoProfile -Command "& 'C:/Users/you/.claude/plugins/cache/revdiff/revdiff/<ver>/.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1' '--view=H:\path\to\file.md'"
+```
+
+The launcher:
 - Detects available terminal (tmux → kitty → wezterm/Kaku → cmux → ghostty → iTerm2 → Emacs vterm on POSIX; WezTerm only on Windows)
 - Launches revdiff in an overlay
+- **Blocks until the TUI exits** (POSIX: foreground or sentinel-file polled; Windows: sentinel-file polled — see `launch-revdiff.ps1`)
 - Captures annotation output to a temp file
-- Prints captured annotations to stdout
+- Prints captured annotations to stdout, then exits
 
 ### Step 3: Process Annotations
 

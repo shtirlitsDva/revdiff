@@ -113,12 +113,27 @@ try {
     # -----------------------------------------------------------------------
     $viewFile = $null
     $filteredArgs = @()
+    $skipNext = $false
     foreach ($a in $ForwardedArgs) {
+        if ($skipNext) { $skipNext = $false; continue }
         if ($a -like '--view=*') {
             $viewFile = $a.Substring('--view='.Length)
-        } else {
-            $filteredArgs += $a
+            continue
         }
+        # Reject caller-supplied --output / -o. The launcher owns the output
+        # file (a temp file whose contents are streamed to stdout on exit).
+        # Agents that pass --output= themselves end up with a confused setup
+        # where revdiff writes to the caller's path while the launcher waits
+        # on its own (now-empty) temp file — caller sees no annotations.
+        # Hard-fail with a pointer instead of silently fighting the caller.
+        if ($a -like '--output=*' -or $a -like '-o=*') {
+            throw "do not pass --output to the launcher; it owns the output file and prints captured annotations to stdout. remove $a from your invocation."
+        }
+        if ($a -eq '--output' -or $a -eq '-o') {
+            $skipNext = $true
+            throw "do not pass --output to the launcher; it owns the output file and prints captured annotations to stdout. remove $a (and its value) from your invocation."
+        }
+        $filteredArgs += $a
     }
 
     $viewAbs  = $null
@@ -247,6 +262,12 @@ try {
     if ($null -ne $paneId) {
         $paneId = ($paneId | Out-String).Trim()
     }
+
+    # Diagnostic line on stderr so a Monitor watching this launcher sees a
+    # "started" signal instead of a long silence followed by stdout dump.
+    # Stderr does not trigger Monitor notifications but is captured to the
+    # task output file — useful when debugging "did the TUI even start".
+    [Console]::Error.WriteLine("[revdiff] split-pane launched (id=$paneId), waiting for TUI exit...")
 
     # -----------------------------------------------------------------------
     # Wait for the split pane to exit. We poll the sentinel file (created by

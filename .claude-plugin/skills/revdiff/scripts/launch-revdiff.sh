@@ -14,6 +14,28 @@ if [ -z "$REVDIFF_BIN" ]; then
     exit 1
 fi
 
+# reject caller-supplied --output / -o. The launcher owns the output file
+# (a temp file whose contents are streamed to stdout on exit). Agents that
+# pass --output= themselves end up with a confused setup where revdiff writes
+# to the caller's path while the launcher's own --output is appended after,
+# making behavior order-dependent and hard to debug. Hard-fail with a pointer
+# instead of silently fighting the caller.
+SKIP_NEXT=0
+for arg in "$@"; do
+    if [ "$SKIP_NEXT" -eq 1 ]; then SKIP_NEXT=0; continue; fi
+    case "$arg" in
+        --output=*|-o=*)
+            echo "error: do not pass $arg to the launcher; it owns the output file and prints captured annotations to stdout. remove $arg from your invocation." >&2
+            exit 2
+            ;;
+        --output|-o)
+            echo "error: do not pass $arg to the launcher; it owns the output file and prints captured annotations to stdout. remove $arg (and its value) from your invocation." >&2
+            exit 2
+            ;;
+    esac
+done
+unset SKIP_NEXT
+
 OUTPUT_FILE=$(mktemp /tmp/revdiff-output-XXXXXX)
 trap 'rm -f "$OUTPUT_FILE"' EXIT
 
