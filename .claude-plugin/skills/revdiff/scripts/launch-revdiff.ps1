@@ -6,14 +6,20 @@
 # annotations to stdout.
 #
 # Usage:  launch-revdiff.ps1 [ref] [--staged] [--only=file1 ...]
-# Output:
-#   - First line on stdout: `[revdiff:STARTED] pane-id=<id>` (proof-of-life
-#     sentinel emitted as soon as the WezTerm split-pane is spawned). Lets a
-#     watching Monitor distinguish "launcher crashed" from "TUI ran with zero
-#     annotations".
-#   - Remaining stdout: annotation text from revdiff's --output file (empty if
-#     no annotations were written).
-#   Callers parsing annotation output MUST strip lines matching `^\[revdiff:`.
+# Output (stdout, in arrival order):
+#   1. `[revdiff:STARTED] pane-id=<id>` — emitted as soon as the WezTerm
+#      split-pane is spawned. Proof the launcher reached the TUI-spawn step;
+#      if this line never arrives, the launcher crashed before that point.
+#   2. `[revdiff:EXIT code=<n>]` — emitted ONLY when revdiff itself returned
+#      a non-zero exit status. Surfaces inside-pane fast-failures (bad path,
+#      codepage mismatch, missing file, future regressions) that would
+#      otherwise look identical to "user reviewed and quit with zero
+#      annotations". When this line arrives, the agent MUST treat it as a
+#      hard error, not as user-approval.
+#   3. Annotation text from revdiff's --output file (empty if no annotations
+#      were written, which is the normal "quit without comments" case).
+# Callers parsing annotation output MUST strip lines matching `^\[revdiff:`
+# but MUST detect the EXIT line and surface the failure to the user.
 #
 # Scope:
 #   The bash sibling (launch-revdiff.sh) supports tmux, kitty, wezterm, cmux,
@@ -105,8 +111,12 @@ $weztermBin = $weztermCmd.Source
 # ---------------------------------------------------------------------------
 $outputFile   = [System.IO.Path]::GetTempFileName()
 $sentinelFile = [System.IO.Path]::GetTempFileName()
-# sentinel must NOT exist when polling starts; the split-pane shell creates it on exit
+$exitCodeFile = [System.IO.Path]::GetTempFileName()
+# sentinel + exit-code file must NOT exist when polling starts; the split-pane
+# shell writes them only after revdiff returns. Pre-existing files would cause
+# the launcher to read stale data and dump bogus output.
 Remove-Item -LiteralPath $sentinelFile -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $exitCodeFile -Force -ErrorAction SilentlyContinue
 
 $exitCode      = 0
 $paneId        = $null
@@ -211,7 +221,19 @@ try {
     $cwdForSpawn = (Get-Location).ProviderPath
 
     # Build the contents of the temp .cmd file. Each line runs one step:
-    #   1. revdiff.exe with its args (paths are quoted — no embedded quotes
+    #   1. @echo off  — suppress per-command echo to the pane.
+    #   2. chcp 65001 >nul  — switch cmd.exe's active codepage to UTF-8.
+    #      RATIONALE: we write this .cmd file as UTF-8 (no BOM). When wezterm
+    #      spawns a fresh cmd.exe to run it, cmd defaults to the OEM codepage
+    #      (e.g. CP850 on da-DK), so a UTF-8 byte pair like `0xC3 0xB8` (`ø`)
+    #      is read as `├ ©` — and `< "<H:\…afløb\…>"` redirects from a
+    #      garbled path that doesn't exist. revdiff then exits fast on missing
+    #      stdin and the silent-failure mode reappears under the STARTED
+    #      sentinel. cmd.exe re-reads each script line from disk after
+    #      executing the prior one, so placing `chcp 65001 >nul` first means
+    #      every subsequent line (including the redirected path) is decoded as
+    #      UTF-8. Standard fix for UTF-8 .cmd files on modern Windows.
+    #   3. revdiff.exe with its args (paths are quoted — no embedded quotes
     #      possible since we control the values, except for ForwardedArgs
     #      which we also wrap in quotes; cmd.exe's double-quote rules are
     #      lenient enough that this is safe for normal ref names and paths).
@@ -221,19 +243,30 @@ try {
     #      intermediate `type` subshell whose teardown after revdiff exits
     #      interacts poorly with WezTerm's exit_behavior, leaving the split
     #      pane in a "press any key" state. `< file` avoids the subshell.
-    #   2. break > <sentinel> to signal completion (atomic empty-file create).
-    # @echo off keeps cmd from echoing each command to the pane.
+    #   4. Capture revdiff's exit code into a temp file BEFORE creating the
+    #      sentinel. The parenthesized `(echo …)` form sidesteps a cmd.exe
+    #      parser quirk where `echo 0>file` is interpreted as redirecting fd
+    #      0 (stdin), not as echoing the string "0". Wrapping in `( … )`
+    #      forces the standard echo-and-redirect semantics regardless of the
+    #      first character of REVDIFF_EXIT.
+    #   5. break > <sentinel> — atomic empty-file create signals the polling
+    #      PowerShell parent that revdiff has returned. Must come AFTER the
+    #      exit-code write so the parent can read both files when sentinel
+    #      appears.
+    #   6. `exit 0` — explicit success termination so WezTerm's exit_behavior
+    #      closes the pane cleanly. Without it, cmd.exe's implicit exit
+    #      inherits the last command's status, which can trip a hold under
+    #      `CloseOnCleanExit`-style configs even when nothing actually failed.
     $revdiffLine = '"' + $revdiffBin + '" ' + (($revdiffArgs | ForEach-Object { '"' + $_ + '"' }) -join ' ')
     if ($null -ne $viewAbs) {
         $revdiffLine = $revdiffLine + ' < "' + $viewAbs + '"'
     }
-    # `exit 0` explicitly terminates cmd.exe with success code so WezTerm's
-    # exit_behavior closes the pane cleanly. Without it, cmd.exe's implicit
-    # exit inherits the last command's status, which can trip a hold under
-    # `CloseOnCleanExit`-style configs even when nothing actually failed.
     $cmdScriptLines = @(
         '@echo off'
+        'chcp 65001 >nul'
         $revdiffLine
+        'set "REVDIFF_EXIT=%ERRORLEVEL%"'
+        '(echo %REVDIFF_EXIT%) > "' + $exitCodeFile + '"'
         'break > "' + $sentinelFile + '"'
         'exit 0'
     )
@@ -303,6 +336,46 @@ try {
     }
 
     # -----------------------------------------------------------------------
+    # Read revdiff's exit code captured by the .cmd wrapper. The sentinel
+    # was written AFTER the exit-code file by the wrapper, so by the time
+    # we see the sentinel both files exist. Non-numeric or missing content
+    # is treated as exit 0 (defensive — we don't want a parse error here to
+    # mask a real revdiff success).
+    # -----------------------------------------------------------------------
+    $revdiffExit = 0
+    if (Test-Path -LiteralPath $exitCodeFile) {
+        $exitText = Get-Content -LiteralPath $exitCodeFile -Raw -ErrorAction SilentlyContinue
+        if (-not [string]::IsNullOrEmpty($exitText)) {
+            $exitText = $exitText.Trim()
+            $parsed = 0
+            if ([int]::TryParse($exitText, [ref] $parsed)) {
+                $revdiffExit = $parsed
+            }
+        }
+    }
+
+    # -----------------------------------------------------------------------
+    # If revdiff itself returned non-zero, emit a `[revdiff:EXIT code=<n>]`
+    # sentinel on stdout BEFORE dumping captured annotations. This is the
+    # second proof-of-life event: STARTED says "the split pane spawned",
+    # EXIT says "the binary inside the pane exited with status N". Together
+    # they close the silent-failure window where:
+    #   - WezTerm split-pane succeeds (STARTED fires) → caller is happy
+    #   - revdiff inside the pane crashes fast (bad path, codepage mismatch,
+    #     missing file, future regression) → empty annotation output → caller
+    #     can't tell apart from "user reviewed and quit with 0 comments"
+    # Now the caller sees STARTED + EXIT(non-zero) + empty-annotations, and
+    # the SKILL.md tells them to surface that as a hard error to the user.
+    #
+    # Annotation dump always runs — revdiff may have written partial output
+    # before crashing, and capturing it is harmless if it's empty.
+    # -----------------------------------------------------------------------
+    if ($revdiffExit -ne 0) {
+        [Console]::Out.WriteLine("[revdiff:EXIT code=$revdiffExit]")
+        [Console]::Out.Flush()
+    }
+
+    # -----------------------------------------------------------------------
     # Dump captured annotation output to stdout — matches `cat "$OUTPUT_FILE"`.
     # Use raw read so line endings and trailing newlines are preserved exactly.
     # -----------------------------------------------------------------------
@@ -330,6 +403,9 @@ finally {
     }
     if (Test-Path -LiteralPath $sentinelFile) {
         Remove-Item -LiteralPath $sentinelFile -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-Path -LiteralPath $exitCodeFile) {
+        Remove-Item -LiteralPath $exitCodeFile -Force -ErrorAction SilentlyContinue
     }
     if ($null -ne $cmdScriptFile -and (Test-Path -LiteralPath $cmdScriptFile)) {
         Remove-Item -LiteralPath $cmdScriptFile -Force -ErrorAction SilentlyContinue

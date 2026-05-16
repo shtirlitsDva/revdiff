@@ -52,7 +52,9 @@ Before invoking revdiff, **verify every rule below applies**. Any one missed pro
 
 7. **Wait for the `[revdiff:STARTED]` Monitor event.** The launcher emits this sentinel to stdout immediately after the WezTerm split-pane is successfully spawned. **If the Monitor task completes without ever emitting `[revdiff:STARTED]`, the TUI never started — treat that as a hard error, not as "user approved".** When parsing annotations, strip any line matching `^\[revdiff:` before processing.
 
-8. **Never pass `--output=` or `-o`.** The launcher owns the output file. Caller-supplied `--output` is hard-rejected with a thrown error.
+8. **Treat `[revdiff:EXIT code=<n>]` as a hard error.** The launcher emits this second sentinel ONLY when revdiff itself exited with non-zero status (a fast-failure *inside* the spawned pane — bad path, codepage mismatch, future regression). It does NOT mean "user finished review with annotations"; it means revdiff crashed. Surface the exit code to the user with the relevant context (file path, args, recent changes) and do NOT proceed to plan or fix anything based on the (likely empty) annotation block. Common cause: filesystem encoding mismatch on non-ASCII paths — upgrade to launcher version that includes `chcp 65001` in the .cmd template.
+
+9. **Never pass `--output=` or `-o`.** The launcher owns the output file. Caller-supplied `--output` is hard-rejected with a thrown error.
 </launch-rules-must-follow>
 
 <failure-modes-quick-reference>
@@ -62,6 +64,7 @@ Before invoking revdiff, **verify every rule below applies**. Any one missed pro
 | Monitor times out | `timeout_ms` was set | Reissue with `persistent: true` and NO `timeout_ms` (rule 4). |
 | Monitor "completes" instantly with no events | Used Bash, not Monitor | Switch to Monitor (rule 3). |
 | Got `[revdiff:STARTED]` then long silence | revdiff is running; user is annotating | Wait. Do NOT assume done. Monitor will emit more events when revdiff exits. |
+| Got `[revdiff:STARTED]` then `[revdiff:EXIT code=<n>]` then empty | revdiff crashed inside the pane (often: non-ASCII path with stale launcher) | Surface the exit code to the user. Do NOT plan or fix from the empty annotation block (rule 8). |
 | Stdout contains "no files match --only filter" | Used `--only=` on a tracked-clean file | Switch to `--view=` (rule 6). |
 | `<PLUGIN_ROOT>` literal in error message | Did not expand `${CLAUDE_PLUGIN_ROOT}` | The skill harness expands `${CLAUDE_PLUGIN_ROOT}` for you when used inside the Bash tool; use that exact form. |
 </failure-modes-quick-reference>
@@ -156,11 +159,14 @@ pwsh -NoProfile -Command "& '${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff
 </concrete-examples>
 
 <expected-monitor-event-stream>
-1. First event: `[revdiff:STARTED] pane-id=<id>` — TUI launched successfully.
-2. (Optional intermediate events: none under normal operation.)
+1. First event: `[revdiff:STARTED] pane-id=<id>` — WezTerm split-pane spawned successfully. Required.
+2. Optional second event: `[revdiff:EXIT code=<n>]` — emitted ONLY when revdiff returned non-zero. **This is a hard error**, not a successful no-annotations review (see rule 8).
 3. Final event(s): annotation block (if user wrote annotations); empty if user quit without annotating.
 
-If event 1 never arrives before Monitor exits, the launcher crashed — read the task output file for stderr. **Do not interpret missing STARTED as user-approval.**
+Failure interpretation rules:
+- Monitor exits and event 1 never arrived → launcher crashed before TUI spawn → read task output file for stderr → do NOT interpret as user-approval.
+- Event 2 arrives → revdiff itself crashed → surface error to user with context → do NOT process the (likely empty) annotation block.
+- Event 1 arrives, no event 2, Monitor exits with empty annotation block → user reviewed and quit without comments → genuine "approved".
 </expected-monitor-event-stream>
 
 <launcher-behavior>
