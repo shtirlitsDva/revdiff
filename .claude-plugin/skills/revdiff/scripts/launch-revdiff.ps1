@@ -6,7 +6,14 @@
 # annotations to stdout.
 #
 # Usage:  launch-revdiff.ps1 [ref] [--staged] [--only=file1 ...]
-# Output: annotation text from revdiff's --output file (empty if none)
+# Output:
+#   - First line on stdout: `[revdiff:STARTED] pane-id=<id>` (proof-of-life
+#     sentinel emitted as soon as the WezTerm split-pane is spawned). Lets a
+#     watching Monitor distinguish "launcher crashed" from "TUI ran with zero
+#     annotations".
+#   - Remaining stdout: annotation text from revdiff's --output file (empty if
+#     no annotations were written).
+#   Callers parsing annotation output MUST strip lines matching `^\[revdiff:`.
 #
 # Scope:
 #   The bash sibling (launch-revdiff.sh) supports tmux, kitty, wezterm, cmux,
@@ -113,9 +120,7 @@ try {
     # -----------------------------------------------------------------------
     $viewFile = $null
     $filteredArgs = @()
-    $skipNext = $false
     foreach ($a in $ForwardedArgs) {
-        if ($skipNext) { $skipNext = $false; continue }
         if ($a -like '--view=*') {
             $viewFile = $a.Substring('--view='.Length)
             continue
@@ -130,7 +135,6 @@ try {
             throw "do not pass --output to the launcher; it owns the output file and prints captured annotations to stdout. remove $a from your invocation."
         }
         if ($a -eq '--output' -or $a -eq '-o') {
-            $skipNext = $true
             throw "do not pass --output to the launcher; it owns the output file and prints captured annotations to stdout. remove $a (and its value) from your invocation."
         }
         $filteredArgs += $a
@@ -263,10 +267,29 @@ try {
         $paneId = ($paneId | Out-String).Trim()
     }
 
-    # Diagnostic line on stderr so a Monitor watching this launcher sees a
-    # "started" signal instead of a long silence followed by stdout dump.
-    # Stderr does not trigger Monitor notifications but is captured to the
-    # task output file — useful when debugging "did the TUI even start".
+    # Proof-of-life sentinel on STDOUT (not stderr).
+    #
+    # Why stdout: the Monitor tool only fires notifications on stdout lines.
+    # Stderr is captured to the task output file but does NOT generate events.
+    # Emitting the sentinel on stdout lets a watching agent distinguish three
+    # otherwise-identical outcomes:
+    #   1. launcher crashed before spawning the TUI  → no STARTED event
+    #   2. TUI started, user wrote 0 annotations, quit → STARTED event then empty
+    #   3. TUI started, user wrote N annotations, quit → STARTED then annotations
+    # Without the sentinel, outcomes (1) and (2) look identical to the caller
+    # (Monitor task completes with empty stdout), which is exactly the silent-
+    # failure mode the skill is fighting. See SKILL.md → launch-rules-must-follow.
+    #
+    # The marker syntax `[revdiff:STARTED]` is grep-friendly. Callers parsing
+    # annotation output MUST strip any line matching `^\[revdiff:` before
+    # processing — annotations themselves are file/line headers like `## foo:1`.
+    #
+    # Flush explicitly: when stdout is a pipe (Monitor's case), PowerShell's
+    # default buffering can delay the line by many seconds. Flush guarantees
+    # real-time delivery so the Monitor's first event fires immediately.
+    [Console]::Out.WriteLine("[revdiff:STARTED] pane-id=$paneId")
+    [Console]::Out.Flush()
+    # Stderr diagnostic is kept for the task output file (debugging).
     [Console]::Error.WriteLine("[revdiff] split-pane launched (id=$paneId), waiting for TUI exit...")
 
     # -----------------------------------------------------------------------
