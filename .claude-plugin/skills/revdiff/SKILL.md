@@ -57,6 +57,21 @@ Before invoking revdiff, **verify every rule below applies**. Any one missed pro
 9. **Never pass `--output=` or `-o`.** The launcher owns the output file. Caller-supplied `--output` is hard-rejected with a thrown error.
 </launch-rules-must-follow>
 
+<followup-revisions-must-use-diff>
+**Iterating on a document: never re-present the full file.** Once the user has reviewed a document via `--view=<path>`, the second (and every subsequent) presentation of the same document MUST be a diff. The user cannot re-read a long document and spot the changes by eye — that defeats the entire purpose of using revdiff for review and makes followup passes nearly unreadable after the second revision.
+
+This rule fires whenever the agent itself authored or edited a text artifact (plan, PRD, draft, long response, generated doc) and is showing the user a revised version of something the user already saw in this session. It is NOT about reviewing source code that the user is iterating on independently.
+
+Mechanism (use this — it works with the current launcher unchanged):
+1. Make sure v1 is committed in git so it becomes the diff base. If the document is not in a repo, `git init` in the directory and commit v1 with a throwaway message — the cost is trivial compared to forcing the user to re-read.
+2. Edit the file in place to produce v2 — save normally.
+3. Re-launch revdiff with NO ref via the canonical pwsh + Monitor invocation. Working-tree-vs-HEAD will show exactly what changed in v2.
+
+`--view=<path>` is appropriate ONLY for the FIRST presentation of a document — when the user has not yet seen its contents. On round 2+, `--view=` is a defect.
+
+This applies regardless of how small the revision is. A two-line tweak inside a 300-line plan still hides inside 298 unchanged lines if you re-present the file.
+</followup-revisions-must-use-diff>
+
 <failure-modes-quick-reference>
 | Symptom | Likely cause | Fix |
 |---|---|---|
