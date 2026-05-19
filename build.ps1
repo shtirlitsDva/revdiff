@@ -3,12 +3,12 @@
 #
 # Purpose:
 #   Produce `.bin\revdiff.exe` (and a branch-suffixed sibling) from
-#   `cmd\revdiff` using the same `go build` flags the Makefile uses, so
+#   `app\` using the same `go build` flags the Makefile uses, so
 #   Windows contributors can build without Git Bash, MinGW, or `make`.
 #
 # Makefile counterpart (see ./Makefile, `build` target):
-#   cd cmd/revdiff && go build -ldflags "-X main.revision=$(REV) -s -w" \
-#                              -o ../../.bin/revdiff.$(BRANCH)
+#   go build -ldflags "-X main.revision=$(REV) -s -w" \
+#            -o .bin/revdiff.$(BRANCH) ./app
 #   cp .bin/revdiff.$(BRANCH) .bin/revdiff
 #
 # Revision string format (matches Makefile REV):
@@ -33,7 +33,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = $PSScriptRoot
 $binDir   = Join-Path $repoRoot '.bin'
-$cmdDir   = Join-Path $repoRoot (Join-Path 'cmd' 'revdiff')
+$appDir   = Join-Path $repoRoot 'app'
 
 if (-not (Test-Path -LiteralPath $binDir)) {
     New-Item -ItemType Directory -Path $binDir | Out-Null
@@ -104,9 +104,9 @@ foreach ($c in $invalidChars) {
 $branchBinary    = Join-Path $binDir ("revdiff.$branchForFilename.exe")
 $canonicalBinary = Join-Path $binDir 'revdiff.exe'
 
-# Build from cmd\revdiff, output to the branch-suffixed binary in .bin\.
+# Build from app, output to the branch-suffixed binary in .bin\.
 # Using an absolute output path keeps us robust against the Push-Location.
-Push-Location -LiteralPath $cmdDir
+Push-Location -LiteralPath $appDir
 try {
     $ldflags = "-X main.revision=$rev -s -w"
     & go build -ldflags $ldflags -o $branchBinary
