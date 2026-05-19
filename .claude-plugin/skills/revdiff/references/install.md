@@ -50,18 +50,25 @@ Automatically opens revdiff when Claude exits plan mode for interactive annotati
 
 ### Launcher scripts
 
-The `revdiff` skill ships with two PowerShell launcher scripts under `.claude-plugin/skills/revdiff/scripts/`:
+The `revdiff` skill ships with these scripts under `.claude-plugin/skills/revdiff/scripts/`:
 
 | Script | Purpose |
 |---|---|
-| `launch-revdiff.ps1` | Spawns revdiff in a WezTerm split pane, captures the annotation output file, and prints annotations to stdout. |
-| `detect-ref.ps1` | Inspects the current git repo and emits structured fields describing what ref the skill should diff against. |
+| `launch-revdiff.cmd` | **Preferred entry point.** Thin cmd.exe shim that forwards args via `pwsh -Command` to `launch-revdiff.ps1`. Always call this instead of the `.ps1` directly. |
+| `launch-revdiff.ps1` | Spawns revdiff in a WezTerm split pane, captures the annotation output file, and prints annotations to stdout. Invoked by the `.cmd` shim — never call directly with `pwsh -File`. |
+| `detect-ref.ps1` | Inspects the current git repo and emits structured fields describing what ref the skill should diff against. Takes no arguments, so it is safe to invoke directly. |
 
-Both scripts are invoked via:
+Invocation patterns differ by script:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:CLAUDE_SKILL_DIR\scripts\<script>.ps1" [args...]
+# launch-revdiff — always go through the .cmd shim so Windows paths round-trip:
+& "$env:CLAUDE_SKILL_DIR\scripts\launch-revdiff.cmd" [revdiff args...]
+
+# detect-ref — no args, so pwsh -File is safe here:
+pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:CLAUDE_SKILL_DIR\scripts\detect-ref.ps1"
 ```
+
+**Never** invoke `launch-revdiff.ps1` via `pwsh -File`. PowerShell's `-File` parameter parser splits any arg containing a colon (`--compare-old=C:\path` becomes two args), silently breaking every Windows absolute-path flag (`--compare-old`, `--compare-new`, `--only`, `--annotations`, `--description-file`, `--config`, `--keys`, `--history-dir`, `--view`). The `.cmd` shim sidesteps this by forwarding into `pwsh -Command "& '<ps1>' %*"`, which preserves colons intact. For free-text values that contain spaces (`--description="hello world"`), use `--description-file=<path>` instead — the `%*` byte-string forwarding mangles strings that contain both spaces and embedded double quotes.
 
 The launcher exits with an error if `wezterm.exe` is not on PATH or `$env:WEZTERM_PANE` is unset, so Claude Code must be running inside a WezTerm pane for the plugin to work.
 

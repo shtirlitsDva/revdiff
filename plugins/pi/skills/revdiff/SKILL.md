@@ -5,6 +5,10 @@ description: Pi-only interactive diff and file review with revdiff. Use when the
 
 # revdiff for pi
 
+> **STALE — pi-harness skill, not maintained on this Windows-only fork.**
+>
+> Inherited from upstream `umputun/revdiff`. The `shtirlitsDva/revdiff` fork targets Windows-only Claude Code; pi is a Unix/macOS harness. This file is left here to preserve upstream parity but is no longer maintained — the user-command examples below do not list two-file compare mode (`--compare-old`/`--compare-new`).
+
 This skill is specific to the **pi** harness.
 Use the revdiff pi extension for interactive review sessions.
 

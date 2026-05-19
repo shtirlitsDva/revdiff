@@ -7,6 +7,10 @@ allowed-tools: [Bash, Read, Edit, Write, Grep, Glob]
 
 # revdiff-plan - Review Codex Output
 
+> **STALE — Codex plan-review skill, not maintained on this Windows-only fork.**
+>
+> Inherited from upstream `umputun/revdiff`. The `shtirlitsDva/revdiff` fork targets Windows-only Claude Code; for Codex on Unix/macOS, use the upstream version. This file is left here to preserve upstream parity but is no longer maintained.
+
 Review the last Codex assistant message with inline annotations using revdiff TUI in a terminal overlay.
 
 ## Script Path Resolution

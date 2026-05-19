@@ -21,6 +21,7 @@ This is the Windows-only fork of `umputun/revdiff`. Terminal support is **WezTer
 - "revdiff README.md", "revdiff docs\plan.md", "revdiff $env:TEMP\notes.txt" — single-file review (`--only` mode)
 - "review this file", "annotate this file", "review file with revdiff"
 - "open this review in revdiff", "show review in revdiff", "review in revdiff" — open an in-session review (preload mode)
+- "compare two files", "diff two files", "compare spec-v1 vs spec-v2", "diff old vs new", "before vs after", "revdiff compare <a> <b>" — two-file diff (`--compare-old`/`--compare-new` mode, no VCS required)
 
 ## Answering Questions
 
@@ -63,6 +64,13 @@ If not found, guide installation — see `references/install.md`:
 
 ### Step 1: Determine Review Mode
 
+**Compare mode**: If `$ARGUMENTS` (or the user's natural-language request) names two distinct file paths with a comparison verb ("compare A vs B", "diff <old> and <new>", "before vs after", "v1 vs v2"), use **compare mode**:
+- Pass `--compare-old=<path-a> --compare-new=<path-b>` to the launcher (no positional refs, no `--only`)
+- Compare mode is **mutually exclusive** with refs, `--staged`, `--only`, `--all-files`, `--stdin`, `--include`, `--exclude`, and `--annotations` — do not combine
+- Works **outside** a git repo and on **untracked** files — revdiff calls `git diff --no-index` under the hood, so only `git` itself needs to be on PATH
+- Pick which file is "old" vs "new" from the user's wording (`v1 vs v2` → old=v1, new=v2; "compare before.md and after.md" → old=before, new=after). If ambiguous, ask
+- Skip ref detection entirely, go directly to Step 2
+
 **All-files mode**: If `$ARGUMENTS` matches "all files", "all-files", or "browse all files" (with optional "exclude <prefix>" parts), use **all-files mode**:
 - Pass `--all-files` to the launcher
 - If user mentions exclude patterns (e.g., "exclude vendor", "exclude vendor and mocks"), pass each as `--exclude=<prefix>`
@@ -79,7 +87,7 @@ If not found, guide installation — see `references/install.md`:
 
 **Ref mode**: If `$ARGUMENTS` contains explicit ref(s) (e.g., `HEAD~1`, `main`, or `main feature` for two-ref diff), use as-is.
 
-**Auto-detect**: If no ref provided, run the smart detection script:
+**Auto-detect**: If no ref provided, run the smart detection script. (`detect-ref.ps1` accepts no arguments, so `pwsh -File` is safe here — the colon-splitting bug described in Step 2 only bites when args contain `:`.)
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:CLAUDE_SKILL_DIR\scripts\detect-ref.ps1"
@@ -109,11 +117,13 @@ When you are launching revdiff for the user (e.g., right after a refactor or ana
 
 **When the recent change likely created new untracked files** (new packages, new test files, new docs, new scripts that haven't been `git add`-ed yet), pass `--untracked` so those files appear in the tree. Use this in working-tree mode (no ref, no `--staged`); skip it for ref-to-ref reviews where untracked files are not part of the historical diff.
 
-Run the bundled launcher via `pwsh`:
+Run the bundled launcher via its `.cmd` shim — **never** invoke `launch-revdiff.ps1` directly with `pwsh -File`, because pwsh's `-File` argument parser splits any arg containing a colon (e.g. `--compare-old=C:\path` becomes two args), silently breaking every Windows absolute-path flag. The `.cmd` shim forwards args verbatim into `pwsh -Command`, which preserves them intact:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:CLAUDE_SKILL_DIR\scripts\launch-revdiff.ps1" [base] [against] [--staged] [--untracked] [--only=file1] [--all-files] [--exclude=prefix] [--description=text|--description-file=path] [--view=path]
+& "$env:CLAUDE_SKILL_DIR\scripts\launch-revdiff.cmd" [base] [against] [--staged] [--untracked] [--only=file1] [--all-files] [--exclude=prefix] [--compare-old=path --compare-new=path] [--description=text|--description-file=path] [--view=path]
 ```
+
+For `--description=` values containing spaces, write the markdown to a temp file and use `--description-file=$env:TEMP\revdiff-desc-<random>.md` instead. The shim's `%*` forwarding round-trips path-shaped args cleanly but mangles strings that contain both spaces and embedded double quotes.
 
 The launcher requires WezTerm — `wezterm.exe` must be on PATH and `$env:WEZTERM_PANE` must be set (WezTerm sets this automatically inside its panes). The launcher spawns revdiff in a split pane of the current WezTerm pane and waits for it to exit.
 
@@ -263,4 +273,14 @@ User: "revdiff docs\plans\feature.md"
 → user annotates prose: "section 'Open questions':3 - drop this, resolved"
 → user quits
 → same annotation loop as above (applies to the file content)
+```
+
+```
+User: "compare spec-v1.md and spec-v2.md"
+→ two file paths + comparison verb → compare mode
+→ launch revdiff with --compare-old=spec-v1.md --compare-new=spec-v2.md (no VCS lookup, no ref)
+→ user reviews the side-by-side diff (works even on untracked files)
+→ user annotates: "spec-v2.md (file-level) - add migration note about deprecated /refresh endpoint"
+→ user quits
+→ same annotation loop as above (applies to the v2 file content)
 ```

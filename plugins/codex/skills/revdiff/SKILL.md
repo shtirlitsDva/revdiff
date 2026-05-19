@@ -7,6 +7,10 @@ allowed-tools: [Bash, Read, Edit, Write, Grep, Glob]
 
 # revdiff - TUI Diff Review
 
+> **STALE — out of sync with `.claude-plugin/skills/revdiff/`.**
+>
+> This is the POSIX (Codex) copy carried over from upstream `umputun/revdiff`. The `shtirlitsDva/revdiff` fork is Windows-only; for Unix/macOS, use the original upstream. This file is left here to preserve upstream parity but is no longer maintained — examples, flag lists, and example sessions may lag behind the canonical Claude Code skill at `.claude-plugin/skills/revdiff/SKILL.md`. Notably, two-file compare mode (`--compare-old`/`--compare-new`) is not documented below.
+
 Review diffs with inline annotations using revdiff TUI in a terminal overlay. Works in git, hg, and jj repos (auto-detected).
 
 ## Script Path Resolution
