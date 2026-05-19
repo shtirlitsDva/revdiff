@@ -130,9 +130,10 @@ The launcher requires WezTerm — `wezterm.exe` must be on PATH and `$env:WEZTER
 **Launcher output protocol** (stdout, in arrival order):
 1. `[revdiff:STARTED] pane-id=<id>` — proof the launcher reached the TUI-spawn step. If this line never arrives, the launcher crashed before that point.
 2. `[revdiff:EXIT code=<n>]` — emitted **only** when revdiff itself returned a non-zero exit status. Surfaces inside-pane fast-failures (bad path, codepage mismatch, missing file). When this line arrives, treat it as a **hard error** — not as user-approval.
-3. Annotation text from revdiff's `--output` file (empty if no annotations were written, which is the normal "quit without comments" case).
+3. `[revdiff:STDERR] <line>` — emitted **only** together with a non-zero EXIT, one prefixed line per non-empty stderr line captured from revdiff. Tells you *why* revdiff failed (`unknown flag \`...\``, `cannot open <path>`, etc.). Surface these lines verbatim to the user when reporting the failure.
+4. Annotation text from revdiff's `--output` file (empty if no annotations were written, which is the normal "quit without comments" case).
 
-When parsing annotations, strip lines matching `^\[revdiff:` but check for an `EXIT` line first and surface the failure to the user.
+When parsing annotations, strip lines matching `^\[revdiff:` but check for an `EXIT` line first and surface both the exit code and any STDERR lines to the user.
 
 **Fork-only `--view=<path>` flag**: pipes the named file into `revdiff --stdin --stdin-name=<basename>` so a tracked-clean file renders as a context-only scratch buffer. Use this when `--only=<path>` would yield "no files match" because the file has no git diff.
 

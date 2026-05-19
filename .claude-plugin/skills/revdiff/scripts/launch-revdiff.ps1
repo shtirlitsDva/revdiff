@@ -16,10 +16,15 @@
 #      otherwise look identical to "user reviewed and quit with zero
 #      annotations". When this line arrives, the agent MUST treat it as a
 #      hard error, not as user-approval.
-#   3. Annotation text from revdiff's --output file (empty if no annotations
+#   3. `[revdiff:STDERR] <line>` — emitted ONLY together with a non-zero EXIT,
+#      one prefixed line per non-empty stderr line captured from revdiff. Lets
+#      callers see *why* revdiff failed (unknown flag, missing file, etc.)
+#      without hand-rolling a debug .cmd wrapper. Suppressed when exit code is
+#      zero so a normal review session never leaks stderr noise into output.
+#   4. Annotation text from revdiff's --output file (empty if no annotations
 #      were written, which is the normal "quit without comments" case).
 # Callers parsing annotation output MUST strip lines matching `^\[revdiff:`
-# but MUST detect the EXIT line and surface the failure to the user.
+# but MUST detect the EXIT line and surface STDERR diagnostics to the user.
 #
 # Scope:
 #   The bash sibling (launch-revdiff.sh) supports tmux, kitty, wezterm, cmux,
@@ -112,11 +117,13 @@ $weztermBin = $weztermCmd.Source
 $outputFile   = [System.IO.Path]::GetTempFileName()
 $sentinelFile = [System.IO.Path]::GetTempFileName()
 $exitCodeFile = [System.IO.Path]::GetTempFileName()
-# sentinel + exit-code file must NOT exist when polling starts; the split-pane
-# shell writes them only after revdiff returns. Pre-existing files would cause
-# the launcher to read stale data and dump bogus output.
+$stderrFile   = [System.IO.Path]::GetTempFileName()
+# sentinel + exit-code + stderr files must NOT exist when polling starts; the
+# split-pane shell writes them only after revdiff returns. Pre-existing files
+# would cause the launcher to read stale data and dump bogus output.
 Remove-Item -LiteralPath $sentinelFile -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $exitCodeFile -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $stderrFile   -Force -ErrorAction SilentlyContinue
 
 $exitCode      = 0
 $paneId        = $null
@@ -237,8 +244,13 @@ try {
     #      possible since we control the values, except for ForwardedArgs
     #      which we also wrap in quotes; cmd.exe's double-quote rules are
     #      lenient enough that this is safe for normal ref names and paths).
-    #      In --view mode this line gets a `< "<file>"` suffix so the file
-    #      is fed to revdiff's stdin via OS file redirection.
+    #      Stderr is redirected to <stderrFile> via `2>"…"` so the parent can
+    #      dump it after [revdiff:EXIT …] for diagnostics. Without this, a
+    #      revdiff error message (unknown flag, missing file) vanishes when
+    #      the split pane closes — the agent sees only EXIT code=1 with no
+    #      context and has to hand-roll a debug .cmd wrapper to find out why.
+    #      In --view mode this line ALSO gets a `< "<file>"` suffix so the
+    #      file is fed to revdiff's stdin via OS file redirection.
     #      DELIBERATELY not `type "<file>" | revdiff …`: the pipe spawns an
     #      intermediate `type` subshell whose teardown after revdiff exits
     #      interacts poorly with WezTerm's exit_behavior, leaving the split
@@ -257,7 +269,7 @@ try {
     #      closes the pane cleanly. Without it, cmd.exe's implicit exit
     #      inherits the last command's status, which can trip a hold under
     #      `CloseOnCleanExit`-style configs even when nothing actually failed.
-    $revdiffLine = '"' + $revdiffBin + '" ' + (($revdiffArgs | ForEach-Object { '"' + $_ + '"' }) -join ' ')
+    $revdiffLine = '"' + $revdiffBin + '" ' + (($revdiffArgs | ForEach-Object { '"' + $_ + '"' }) -join ' ') + ' 2>"' + $stderrFile + '"'
     if ($null -ne $viewAbs) {
         $revdiffLine = $revdiffLine + ' < "' + $viewAbs + '"'
     }
@@ -372,6 +384,22 @@ try {
     # -----------------------------------------------------------------------
     if ($revdiffExit -ne 0) {
         [Console]::Out.WriteLine("[revdiff:EXIT code=$revdiffExit]")
+        # Surface stderr captured by the .cmd wrapper. One `[revdiff:STDERR]`
+        # line per non-empty stderr line — the prefix matches the existing
+        # `^\[revdiff:` strip filter so diagnostics don't pollute annotation
+        # parsing, while a caller scanning for STDERR lines can present them
+        # to the user. Suppressed on revdiffExit == 0 so a normal review
+        # session never leaks stderr noise.
+        if (Test-Path -LiteralPath $stderrFile) {
+            $stderrText = Get-Content -LiteralPath $stderrFile -Raw -ErrorAction SilentlyContinue
+            if (-not [string]::IsNullOrEmpty($stderrText)) {
+                foreach ($line in ($stderrText -split "`r?`n")) {
+                    if ($line.Length -gt 0) {
+                        [Console]::Out.WriteLine("[revdiff:STDERR] $line")
+                    }
+                }
+            }
+        }
         [Console]::Out.Flush()
     }
 
@@ -406,6 +434,9 @@ finally {
     }
     if (Test-Path -LiteralPath $exitCodeFile) {
         Remove-Item -LiteralPath $exitCodeFile -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-Path -LiteralPath $stderrFile) {
+        Remove-Item -LiteralPath $stderrFile -Force -ErrorAction SilentlyContinue
     }
     if ($null -ne $cmdScriptFile -and (Test-Path -LiteralPath $cmdScriptFile)) {
         Remove-Item -LiteralPath $cmdScriptFile -Force -ErrorAction SilentlyContinue
