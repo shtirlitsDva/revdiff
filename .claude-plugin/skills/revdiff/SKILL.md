@@ -1,269 +1,266 @@
 ---
 name: revdiff
-description: Review diffs, files, and documents with inline annotations in a TUI overlay, or answer questions about revdiff usage, configuration, themes, and keybindings. Opens revdiff in tmux/kitty/wezterm/cmux/ghostty/iterm2/emacs-vterm, captures annotations, and addresses them. Activates on "revdiff", "review diff", "annotate diff", "git review with revdiff", "interactive diff review", "revdiff all files", "review all files", "browse all files", "revdiff config", "revdiff themes", "revdiff keybindings", "how to configure revdiff", "what themes does revdiff have".
-argument-hint: 'optional: git ref(s), "all files", or file path'
+description: Review diffs, files, and documents with inline annotations in a TUI overlay, or answer questions about revdiff usage, configuration, themes, and keybindings. Opens revdiff in a WezTerm split pane on Windows, captures annotations, and addresses them. Works in git, hg, and jj repos (auto-detected). Activates on "revdiff", "review diff", "review changes", "annotate diff", "git review with revdiff", "hg review with revdiff", "review jj change", "interactive diff review", "revdiff all files", "review all files", "browse all files", "revdiff <file>", "revdiff README.md", "review this file", "annotate this file", "review file with revdiff", "open this review in revdiff", "show review in revdiff", "review in revdiff", "revdiff config", "revdiff themes", "revdiff keybindings", "how to configure revdiff", "what themes does revdiff have".
+argument-hint: 'optional: ref(s), "all files", or file path'
 allowed-tools: [Bash, Read, Edit, Write, Grep, Glob]
 ---
 
-<title>revdiff — TUI Diff Review (Windows-only fork)</title>
+# revdiff - TUI Diff Review (Windows fork)
 
-<platform-scope>
-This fork is **Windows-only** for the launch flow. The PowerShell launcher (`launch-revdiff.ps1`) called through `pwsh -NoProfile -Command` is the only supported path. The POSIX `.sh` siblings exist for upstream parity but MUST NOT be used on this machine — they detect terminals (tmux/kitty/iTerm2) that don't exist on Windows and fall through silently, producing the empty-stdout / silent-failure mode described below.
-</platform-scope>
+Review diffs with inline annotations using revdiff TUI in a WezTerm split pane. Works in git, hg, and jj repos (auto-detected).
 
-<activation-triggers>
-- "revdiff", "review diff", "annotate diff"
+This is the Windows-only fork of `umputun/revdiff`. Terminal support is **WezTerm only**; shell is **PowerShell (pwsh)**.
+
+## Activation Triggers
+
+- "revdiff", "review diff", "review changes", "annotate diff"
 - "revdiff HEAD~1", "revdiff main"
+- "hg review with revdiff", "review jj change"
 - "revdiff all files", "review all files", "browse all files"
 - "revdiff all files exclude vendor"
-</activation-triggers>
+- "revdiff README.md", "revdiff docs\plan.md", "revdiff $env:TEMP\notes.txt" — single-file review (`--only` mode)
+- "review this file", "annotate this file", "review file with revdiff"
+- "open this review in revdiff", "show review in revdiff", "review in revdiff" — open an in-session review (preload mode)
 
-<answering-questions>
+## Answering Questions
+
 If the user asks a question about revdiff (configuration, themes, keybindings, installation, usage) rather than requesting a review session, consult the reference files in `references/` and answer directly. Do NOT launch the TUI for informational questions.
 
 - `references/install.md` — installation methods and plugin setup
 - `references/config.md` — config file, options, colors, chroma themes
 - `references/usage.md` — examples, key bindings, output format
-</answering-questions>
 
-<how-it-works>
-1. Launch revdiff in a WezTerm split pane of the current pane.
-2. User navigates the content, adds annotations on specific lines.
-3. On quit, annotations are captured to a temp file and streamed to stdout.
-4. Claude reads annotations and addresses each one.
-5. Loop: re-launch revdiff to verify fixes; user can add more annotations.
-6. Done when user quits without annotations (empty stream after `[revdiff:STARTED]`).
-</how-it-works>
+## Using Existing Review History
 
-<launch-rules-must-follow>
-Before invoking revdiff, **verify every rule below applies**. Any one missed produces the failure mode "TUI exits immediately, agent sees empty stdout, assumes user approved with zero annotations". Real fix is to follow all rules; do not interpret a silent exit as success.
+If the user says things like "locate my review", "use my latest revdiff annotations", "pull up the review I just did in another terminal", or "what did I annotate earlier" — the user ran revdiff outside this plugin flow and wants Claude to process the stored annotations. Find the most recent history file under `%APPDATA%\revdiff\history\<repo-name>\` (override via `$env:REVDIFF_HISTORY_DIR`) and process the annotations through Step 3.5 classification as if they had come from a fresh launcher call.
 
-1. **Use `pwsh -NoProfile -Command`, never `-File`.** With `-File`, PowerShell's argument binder splits paths on `:`. `--view=H:\foo` becomes `--view=H` and the rest is dropped. revdiff then crashes with "file not found". `-Command` with a single-quoted call operator preserves the full string.
+Each history file contains a header (path, refs, and — when available — a git commit hash), the annotations in `## file:line (type)` format, and the raw git diff for annotated files. The `commit:` line and diff block are captured from git only; in hg/jj repos the diff block will be empty and no commit hash is recorded. See `references/usage.md` "Review History" section for directory layout, stdin/only handling, and override options.
 
-2. **Single-quote every argument inside the `-Command` string.** Single quotes are PowerShell literals — no escaping of `\`, `:`, or `=` needed. Either backslash or forward-slash paths work inside the quotes; pick one and stick with it for an invocation.
+## Opening an In-Session Review
 
-3. **Use the `Monitor` tool, not `Bash run_in_background`.** Monitor streams each stdout line as a real-time event and only completes when the launcher exits. `Bash run_in_background` returns a task ID immediately, producing the false-positive "agent thinks it's done".
+When the user asks to open an in-session review in revdiff (the conversation already contains review comments produced earlier in the session), write those comments to a temp file under `$env:TEMP` (e.g. `$env:TEMP\revdiff-review-<random>.md`) using the format documented in `references/usage.md` ("Output Format" section), then run the normal launcher flow (Step 1 ref detection, Step 2 invocation) with `--annotations=<temp-path>` appended. Step 3 onward handles the curated annotations as usual.
 
-4. **Pass `persistent: true` to Monitor. NEVER set `timeout_ms`.** Default Monitor timeout is 300s; real reviews routinely exceed that — the user may step away, read slowly, re-open the TUI. A timeout kills the launcher and discards every annotation written after the kill. Call TaskStop to clean up early if needed.
+## How It Works
 
-5. **Use the `.ps1` launcher, never the `.sh` sibling.** The bash launcher detects POSIX-only terminals on Windows, finds none, and falls through silently.
+1. Launch revdiff in a WezTerm split pane next to the pane running Claude Code
+2. User navigates the diff, adds annotations on specific lines
+3. On quit, annotations are captured from the launcher's `--output` file and printed to stdout
+4. Claude reads annotations and addresses each one
+5. Loop: re-launch revdiff to verify fixes, user can add more annotations
+6. Done when user quits without annotations
 
-6. **For file view, pass `--view=<absolute-path>`. NEVER use `--only=<path>`.** `--only=` filters git diff output; on a tracked-clean file it produces zero diff and revdiff exits with "no files match --only filter" — same false-positive symptom. `--view=` is a launcher-side flag that feeds the file as stdin context, working regardless of git state.
+## Workflow
 
-7. **Wait for the `[revdiff:STARTED]` Monitor event.** The launcher emits this sentinel to stdout immediately after the WezTerm split-pane is successfully spawned. **If the Monitor task completes without ever emitting `[revdiff:STARTED]`, the TUI never started — treat that as a hard error, not as "user approved".** When parsing annotations, strip any line matching `^\[revdiff:` before processing.
+### Step 0: Verify Installation
 
-8. **Treat `[revdiff:EXIT code=<n>]` as a hard error.** The launcher emits this second sentinel ONLY when revdiff itself exited with non-zero status (a fast-failure *inside* the spawned pane — bad path, codepage mismatch, future regression). It does NOT mean "user finished review with annotations"; it means revdiff crashed. Surface the exit code to the user with the relevant context (file path, args, recent changes) and do NOT proceed to plan or fix anything based on the (likely empty) annotation block. Common cause: filesystem encoding mismatch on non-ASCII paths — upgrade to launcher version that includes `chcp 65001` in the .cmd template.
-
-9. **Never pass `--output=` or `-o`.** The launcher owns the output file. Caller-supplied `--output` is hard-rejected with a thrown error.
-</launch-rules-must-follow>
-
-<followup-revisions-must-use-diff>
-**Iterating on a document: never re-present the full file.** Once the user has reviewed a document via `--view=<path>`, the second (and every subsequent) presentation of the same document MUST be a diff. The user cannot re-read a long document and spot the changes by eye — that defeats the entire purpose of using revdiff for review and makes followup passes nearly unreadable after the second revision.
-
-This rule fires whenever the agent itself authored or edited a text artifact (plan, PRD, draft, long response, generated doc) and is showing the user a revised version of something the user already saw in this session. It is NOT about reviewing source code that the user is iterating on independently.
-
-Mechanism (use this — it works with the current launcher unchanged):
-1. Make sure v1 is committed in git so it becomes the diff base. If the document is not in a repo, `git init` in the directory and commit v1 with a throwaway message — the cost is trivial compared to forcing the user to re-read.
-2. Edit the file in place to produce v2 — save normally.
-3. Re-launch revdiff with NO ref via the canonical pwsh + Monitor invocation. Working-tree-vs-HEAD will show exactly what changed in v2.
-
-`--view=<path>` is appropriate ONLY for the FIRST presentation of a document — when the user has not yet seen its contents. On round 2+, `--view=` is a defect.
-
-This applies regardless of how small the revision is. A two-line tweak inside a 300-line plan still hides inside 298 unchanged lines if you re-present the file.
-</followup-revisions-must-use-diff>
-
-<failure-modes-quick-reference>
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| Monitor completes with empty stdout, no `[revdiff:STARTED]` | Launcher crashed before TUI spawned | Read task output file for stderr; usually wrong pwsh invocation form (rule 1/2). |
-| Monitor times out | `timeout_ms` was set | Reissue with `persistent: true` and NO `timeout_ms` (rule 4). |
-| Monitor "completes" instantly with no events | Used Bash, not Monitor | Switch to Monitor (rule 3). |
-| Got `[revdiff:STARTED]` then long silence | revdiff is running; user is annotating | Wait. Do NOT assume done. Monitor will emit more events when revdiff exits. |
-| Got `[revdiff:STARTED]` then `[revdiff:EXIT code=<n>]` then empty | revdiff crashed inside the pane (often: non-ASCII path with stale launcher) | Surface the exit code to the user. Do NOT plan or fix from the empty annotation block (rule 8). |
-| Stdout contains "no files match --only filter" | Used `--only=` on a tracked-clean file | Switch to `--view=` (rule 6). |
-| `<PLUGIN_ROOT>` literal in error message | Did not expand `${CLAUDE_PLUGIN_ROOT}` | The skill harness expands `${CLAUDE_PLUGIN_ROOT}` for you when used inside the Bash tool; use that exact form. |
-</failure-modes-quick-reference>
-
-<step-0-verify-installation>
-```bash
-where.exe revdiff.exe
+```powershell
+Get-Command revdiff
 ```
 
-If not found, install:
-```bash
-go install github.com/umputun/revdiff/cmd/revdiff@latest
-```
-</step-0-verify-installation>
+If not found, guide installation — see `references/install.md`:
+- `go install github.com/shtirlitsDva/revdiff/app@latest`
+- Or build from source with `.\build.ps1`
 
-<step-1-determine-review-mode>
+### Step 1: Determine Review Mode
 
-<mode-all-files>
-If `$ARGUMENTS` matches "all files", "all-files", or "browse all files" (with optional "exclude <prefix>" parts):
-- Forward `--all-files` to the launcher.
-- For each "exclude <prefix>" part, forward `--exclude=<prefix>`.
-- Skip ref detection entirely → go to Step 2.
+**All-files mode**: If `$ARGUMENTS` matches "all files", "all-files", or "browse all files" (with optional "exclude <prefix>" parts), use **all-files mode**:
+- Pass `--all-files` to the launcher
+- If user mentions exclude patterns (e.g., "exclude vendor", "exclude vendor and mocks"), pass each as `--exclude=<prefix>`
+- Skip ref detection entirely, go directly to Step 2
+- Example: "all files exclude vendor" → `--all-files --exclude=vendor`
 
-Example: "all files exclude vendor" → `--all-files --exclude=vendor`.
-</mode-all-files>
+**File review mode**: If `$ARGUMENTS` is a single token that points at a file on disk (e.g., `docs\plans\feature.md`, `$env:TEMP\notes.txt`, `README.md`, `main.go`, `file.blah`), treat it as file review:
+- Decide with `Test-Path -LiteralPath $ARGUMENTS -PathType Leaf` — if the file exists, it's file review mode
+- Also treat as file review if the token contains a drive letter (e.g. `C:\…`), starts with `.\` or `\`, or contains a path separator and has a file extension (e.g., `src\app.go`), even when the file is not yet reachable from the current directory
+- Skip ref detection entirely
+- Go directly to Step 2 with `--only=<filepath>` (no ref argument)
+- Works both inside and outside a VCS repo — revdiff reads the file from disk as context-only
+- Ambiguous token (e.g., `main` — both a branch name and a potential filename without extension) → prefer ref mode; ask the user only if neither `Test-Path` nor `git rev-parse --verify` resolves
 
-<mode-file-view>
-If `$ARGUMENTS` is a file path (e.g. `docs/notes.md`, `H:\path\to\file.txt`, or any tracked-clean / untracked file):
-- Forward `--view=<absolute-path>` to the launcher.
-- Skip ref detection entirely → go to Step 2.
-- **Do NOT use `--only=`** (see rule 6).
-</mode-file-view>
+**Ref mode**: If `$ARGUMENTS` contains explicit ref(s) (e.g., `HEAD~1`, `main`, or `main feature` for two-ref diff), use as-is.
 
-<mode-ref>
-If `$ARGUMENTS` contains explicit git ref(s) (`HEAD~1`, `main`, or `main feature` for a two-ref diff):
-- Forward refs as-is.
-- Skip ref detection → go to Step 2.
-</mode-ref>
+**Auto-detect**: If no ref provided, run the smart detection script:
 
-<mode-auto-detect>
-If no arguments, run detect-ref:
-```bash
-pwsh -NoProfile -Command "& '${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/detect-ref.ps1'"
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:CLAUDE_SKILL_DIR\scripts\detect-ref.ps1"
 ```
 
-Returns these structured fields:
-- `branch`, `main_branch`, `is_main`, `has_uncommitted`
-- `suggested_ref` — ref to pass to revdiff (empty = uncommitted only)
-- `needs_ask` — `true` if the agent should ask the user before proceeding
+The script outputs structured fields:
+- `branch`, `main_branch`, `is_main`, `has_uncommitted`, `has_staged_only`
+- `suggested_ref` — the ref to pass to revdiff (empty = uncommitted changes)
+- `use_staged` — if `true`, pass `--staged` to the launcher (staged-only changes detected)
+- `needs_ask` — if `true`, ask the user before proceeding
 
-**When `needs_ask: true`** (feature branch with uncommitted changes), use AskUserQuestion:
-- "Uncommitted only" — pass no ref (review just working changes)
-- "Branch vs {main_branch}" — pass `main_branch` as ref (full branch diff including uncommitted)
+**When `use_staged: true`**, pass `--staged` to the launcher. This means all changes are in the index (staged) with nothing unstaged — without `--staged`, revdiff would show an empty diff.
+
+**When `needs_ask: true`** (on a feature branch with uncommitted changes), use AskUserQuestion:
+- **"Uncommitted only"** — pass no ref (review just working changes)
+- **"Branch vs {main_branch}"** — pass main_branch as ref (full branch diff including uncommitted)
 
 **When `needs_ask: false`**, use `suggested_ref` directly:
-- On main + uncommitted → no ref
-- On main + clean → `HEAD~1`
-- On feature branch + clean → main branch name
-</mode-auto-detect>
+- On main + uncommitted → no ref (uncommitted changes)
+- On main + staged only → no ref + `--staged` (staged changes)
+- On main + clean → `HEAD~1` (last commit)
+- On feature branch + clean → main branch name (full branch diff)
 
-</step-1-determine-review-mode>
+### Step 2: Launch Review
 
-<step-2-launch>
+When you are launching revdiff for the user (e.g., right after a refactor or analysis), pass `--description="..."` so the info popup (`i` key) explains what the change is and what to look at — markdown is supported. For longer prose, write the markdown to a temp file and pass `--description-file=$env:TEMP\revdiff-desc-<random>.md`. The two flags are mutually exclusive; both are optional. Skip when there's no useful context to add.
 
-<canonical-invocation>
-```bash
-pwsh -NoProfile -Command "& '${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1' '<arg1>' '<arg2>' ..."
+**When the recent change likely created new untracked files** (new packages, new test files, new docs, new scripts that haven't been `git add`-ed yet), pass `--untracked` so those files appear in the tree. Use this in working-tree mode (no ref, no `--staged`); skip it for ref-to-ref reviews where untracked files are not part of the historical diff.
+
+Run the bundled launcher via `pwsh`:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:CLAUDE_SKILL_DIR\scripts\launch-revdiff.ps1" [base] [against] [--staged] [--untracked] [--only=file1] [--all-files] [--exclude=prefix] [--description=text|--description-file=path] [--view=path]
 ```
 
-Wrap each argument in single quotes inside the `-Command` string. Pass this as the `command` field to the `Monitor` tool with:
-- `persistent: true`
-- `timeout_ms`: **omitted** (no timeout)
-- `description`: human-readable label, e.g. `"revdiff review of foo.md"`
-</canonical-invocation>
+The launcher requires WezTerm — `wezterm.exe` must be on PATH and `$env:WEZTERM_PANE` must be set (WezTerm sets this automatically inside its panes). The launcher spawns revdiff in a split pane of the current WezTerm pane and waits for it to exit.
 
-<concrete-examples>
+**Launcher output protocol** (stdout, in arrival order):
+1. `[revdiff:STARTED] pane-id=<id>` — proof the launcher reached the TUI-spawn step. If this line never arrives, the launcher crashed before that point.
+2. `[revdiff:EXIT code=<n>]` — emitted **only** when revdiff itself returned a non-zero exit status. Surfaces inside-pane fast-failures (bad path, codepage mismatch, missing file). When this line arrives, treat it as a **hard error** — not as user-approval.
+3. Annotation text from revdiff's `--output` file (empty if no annotations were written, which is the normal "quit without comments" case).
 
-File view of `H:\path\to\notes.md`:
-```bash
-pwsh -NoProfile -Command "& '${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1' '--view=H:\path\to\notes.md'"
-```
+When parsing annotations, strip lines matching `^\[revdiff:` but check for an `EXIT` line first and surface the failure to the user.
 
-Diff against `HEAD~1`:
-```bash
-pwsh -NoProfile -Command "& '${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1' 'HEAD~1'"
-```
+**Fork-only `--view=<path>` flag**: pipes the named file into `revdiff --stdin --stdin-name=<basename>` so a tracked-clean file renders as a context-only scratch buffer. Use this when `--only=<path>` would yield "no files match" because the file has no git diff.
 
-All tracked files, excluding `vendor/`:
-```bash
-pwsh -NoProfile -Command "& '${CLAUDE_PLUGIN_ROOT}/.claude-plugin/skills/revdiff/scripts/launch-revdiff.ps1' '--all-files' '--exclude=vendor'"
-```
-</concrete-examples>
+**IMPORTANT — long-running command**: The launcher blocks until the user finishes reviewing in the WezTerm split pane, which can exceed the default bash tool timeout. Set the bash timeout parameter to the **maximum your harness allows** (e.g. 1800000 or higher on OpenCode). Do NOT use `run_in_background` for this — background-task handling is unreliable for interactive TUI launchers (processes may be killed unprompted, and polling loops can leave the session idle after the review finishes). If the review outlasts the timeout cap, the fallback in Step 3 handles it.
 
-<expected-monitor-event-stream>
-1. First event: `[revdiff:STARTED] pane-id=<id>` — WezTerm split-pane spawned successfully. Required.
-2. Optional second event: `[revdiff:EXIT code=<n>]` — emitted ONLY when revdiff returned non-zero. **This is a hard error**, not a successful no-annotations review (see rule 8).
-3. Final event(s): annotation block (if user wrote annotations); empty if user quit without annotating.
+The script:
+- Verifies WezTerm is available and `$env:WEZTERM_PANE` is set
+- Spawns a WezTerm split-pane that runs revdiff
+- Captures annotation output to a temp file under `$env:TEMP`
+- Prints captured annotations to stdout
 
-Failure interpretation rules:
-- Monitor exits and event 1 never arrived → launcher crashed before TUI spawn → read task output file for stderr → do NOT interpret as user-approval.
-- Event 2 arrives → revdiff itself crashed → surface error to user with context → do NOT process the (likely empty) annotation block.
-- Event 1 arrives, no event 2, Monitor exits with empty annotation block → user reviewed and quit without comments → genuine "approved".
-</expected-monitor-event-stream>
+### Step 3: Process Annotations
 
-<launcher-behavior>
-The launcher:
-- Validates `WEZTERM_PANE` env var is set (errors out if not in WezTerm)
-- Spawns revdiff in a WezTerm split-pane via `wezterm cli split-pane --bottom --percent <REVDIFF_POPUP_HEIGHT:-90> --pane-id $WEZTERM_PANE`
-- Emits `[revdiff:STARTED] pane-id=<id>` to stdout (Monitor event 1)
-- Blocks polling a sentinel file until revdiff exits
-- Streams captured annotations from the temp output file to stdout
-- Exits with status 0 on success, 1 on any error
-</launcher-behavior>
+**Collecting launcher output**: In the normal case the launcher returns synchronously with annotations on stdout — process them as described below. If the bash tool instead reports a timeout (on Claude Code the task keeps running in the background after the 10-minute cap; on other harnesses it may be killed outright), revdiff is almost certainly still open in the WezTerm split. Do NOT retry the launcher. Use the fallback:
 
-</step-2-launch>
+1. Tell the user: "The bash tool timed out, but revdiff may still be open. Let me know when you're done reviewing."
+2. Wait for the user to reply. They cannot respond while the WezTerm split has focus, so their reply confirms revdiff has exited.
+3. Read the most recent output file from `$env:TEMP`:
+   ```powershell
+   $f = Get-ChildItem -LiteralPath $env:TEMP -Filter 'revdiff-output-*' -File `
+        | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+   if ($f) { Get-Content -LiteralPath $f.FullName -Raw }
+   ```
+4. If it has content, process as annotations below. If empty or no file, the user quit without annotating.
 
-<step-3-process-annotations>
-Read the Monitor task's output file. Strip any line matching `^\[revdiff:` (these are launcher sentinels, not user annotations). The remaining content is the annotation block.
+This fallback is safe because revdiff writes the output file atomically on exit — there is never a partial read.
 
-Format:
+If the script produces output, the user made annotations. The output format is:
+
 ```
 ## file.go:43 (+)
 use errors.Is() instead of direct comparison
 
 ## store.go:18 (-)
 don't remove this validation
-
-## docs/notes.md (file-level)
-overall: rephrase the intro
 ```
 
-Each block:
-- `## filename:line (type)` — `(+)` = added line, `(-)` = removed line, `(file-level)` = whole-file note
+Each annotation block has:
+- `## filename:line (type)` — which file and line, `(+)` = added, `(-)` = removed, `(file-level)` = file note
 - Comment text below — what the user wants changed
-</step-3-process-annotations>
 
-<step-4-plan-changes>
-Enter plan mode (EnterPlanMode) to analyze annotations:
+### Step 3.5: Classify Annotations
+
+Split annotations into two categories:
+
+**Explanation requests** — annotation matches either rule (case-insensitive):
+- contains two or more consecutive question marks anywhere in the text (`??`, `???`, etc.) — a language-neutral shortcut for "please explain"
+- OR starts with one of: `explain`, `remind`, `describe`, `what is`, `what are`, `how does`, `how do`, `clarify`
+
+These are questions the user wants answered, not code changes.
+
+**Code-change directives** — everything else. These are instructions to modify code.
+
+**If explanation requests are found:**
+
+1. Answer each explanation request — read the referenced code, generate a clear markdown explanation
+2. If there are also code-change directives in the same batch, note them as pending (they carry over to Step 4 after the explanation loop)
+3. Enter the **explanation loop**:
+
+   a. Write the explanation to a temp markdown file (e.g., `$env:TEMP\revdiff-explain-<random>.md`)
+   b. Launch revdiff with `--only=<temp-path>` via the launcher script — this opens the explanation as a scrollable markdown view with TOC sidebar
+   c. **If user quits without annotations** → explanation accepted, clean up temp file, proceed:
+      - If pending code-change directives exist → go to Step 4
+      - Otherwise → go to Step 6 (re-launch revdiff with the original diff ref)
+   d. **If user annotates the explanation** → these are follow-up questions or clarification requests. Read the annotations, refine/extend the explanation markdown, write updated temp file, go back to step (b)
+
+The explanation loop continues until the user quits without annotating. This allows a natural back-and-forth dialogue where the user can ask for more detail or corrections on specific parts of the explanation.
+
+**If no explanation requests** — all annotations are code-change directives, proceed directly to Step 4.
+
+### Step 4: Plan Changes
+
+Enter plan mode (EnterPlanMode) to analyze code-change annotations:
 - List each annotation with file and line reference
 - Describe the planned change for each
 - Get user approval before modifying code
-</step-4-plan-changes>
 
-<step-5-address-annotations>
-After plan approval, fix the source. Each annotation is a directive.
-</step-5-address-annotations>
+### Step 5: Address Annotations
 
-<step-6-loop>
-Re-launch revdiff with the same arguments. User can:
-- Add more annotations → back to Step 3
-- Quit without annotations → review complete (only `[revdiff:STARTED]` in output)
-</step-6-loop>
+After plan approval, fix the actual source code. Each annotation is a directive.
 
-<step-7-done>
-When the captured output contains only `[revdiff:STARTED]` and no annotation blocks, the review is complete. Inform the user.
-</step-7-done>
+### Step 6: Loop
 
-<example-sessions>
+After fixing (or after "Continue review" from Step 3.5), run the launcher script again with the same ref. The user can:
+- Add more annotations → go back to Step 3
+- Quit without annotations → review complete (no output)
+
+### Step 7: Done
+
+When the script produces no output, the review is complete. Inform the user.
+
+## Example Sessions
 
 ```
 User: "revdiff HEAD~1"
-→ Launch via pwsh + Monitor(persistent:true)
-→ Event: [revdiff:STARTED] pane-id=8
+→ launch revdiff in a WezTerm split pane with HEAD~1 diff
 → user annotates: "handler.go:43 - use errors.Is()"
 → user quits
-→ Monitor emits annotation block, task completes
-→ Enter plan mode: "add errors.Is() check at handler.go:43"
-→ User approves; fix applied
-→ Re-launch revdiff HEAD~1
-→ Event: [revdiff:STARTED], then empty
-→ "Review complete."
+→ annotations captured
+→ enter plan mode: "add errors.Is() check at handler.go:43"
+→ user approves
+→ fix applied
+→ re-launch revdiff HEAD~1
+→ user sees fix, quits without annotations
+→ "review complete"
+```
+
+```
+User: "revdiff HEAD~3"
+→ launch revdiff in a WezTerm split pane with HEAD~3 diff
+→ user annotates: "server.go:72 - explain what this mutex protects"
+→ user quits
+→ annotation classified as explanation request (starts with "explain")
+→ Claude reads server.go:72, generates markdown explanation
+→ writes to $env:TEMP\revdiff-explain-<random>.md
+→ launch revdiff --only=<temp-path> (explanation view with TOC)
+→ user reads explanation, annotates: "what about the race condition on line 80?"
+→ Claude refines explanation, rewrites temp file
+→ re-launch revdiff --only=<temp-path>
+→ user reads updated explanation, quits without annotations
+→ explanation accepted, clean up temp file
+→ re-launch revdiff HEAD~3 (back to diff review)
+→ user quits without annotations
+→ "review complete"
 ```
 
 ```
 User: "revdiff all files exclude vendor"
-→ Launch with --all-files --exclude=vendor
-→ Event: [revdiff:STARTED]
-→ User browses, annotates, quits
-→ Annotations captured → same loop as above
+→ launch revdiff with --all-files --exclude=vendor
+→ user browses all tracked files, annotates as needed
+→ same annotation loop as above
 ```
-</example-sessions>
 
-<appendix-cross-platform>
-The repository's POSIX siblings `launch-revdiff.sh` and `detect-ref.sh` exist for parity with the upstream `umputun/revdiff` plugin on macOS / Linux installs. They are not used on Windows and MUST NOT be invoked from Windows agents — they have different terminal-detection logic and do not emit the `[revdiff:STARTED]` sentinel.
-
-The fork-only `--view=<path>` flag is implemented in `launch-revdiff.ps1` only. The bash sibling does not understand it.
-</appendix-cross-platform>
+```
+User: "revdiff docs\plans\feature.md"
+→ Test-Path docs\plans\feature.md succeeds → file review mode
+→ launch revdiff with --only=docs\plans\feature.md (context-only view, no ref)
+→ user annotates prose: "section 'Open questions':3 - drop this, resolved"
+→ user quits
+→ same annotation loop as above (applies to the file content)
+```

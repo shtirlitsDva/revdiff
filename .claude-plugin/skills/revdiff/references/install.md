@@ -1,40 +1,68 @@
 # Installation
 
-**Homebrew (macOS/Linux):**
-```bash
-brew install umputun/apps/revdiff
-```
+This is the Windows-only fork of `umputun/revdiff`. Supported environment: **Windows 10/11** with **WezTerm** as the terminal, **PowerShell 7+ (pwsh)** for scripting. cmd.exe, Windows Terminal, ConEmu, mintty, and WSL are not validated.
 
-**Go install:**
-```bash
-go install github.com/umputun/revdiff/cmd/revdiff@latest
-```
+## Install the binary
 
-**Binary releases:** download from [GitHub Releases](https://github.com/umputun/revdiff/releases) (deb, rpm, archives for linux/darwin amd64/arm64).
-
-**Windows (10/11 + WezTerm):** install via Go from PowerShell:
+**Go install (recommended):**
 
 ```powershell
-go install github.com/umputun/revdiff/cmd/revdiff@latest
+go install github.com/shtirlitsDva/revdiff/app@latest
 ```
 
-This produces `revdiff.exe` under `%USERPROFILE%\go\bin` (or `%GOPATH%\bin`). Make sure that directory is on your `PATH`. Or build from a local checkout with `.\build.ps1` (output: `.bin\revdiff.exe`), run the tests with `.\test.ps1`. `git` must be on `PATH`. WezTerm is the only validated Windows terminal; cmd.exe, Windows Terminal, ConEmu, and mintty are not tested.
+This produces `revdiff.exe` in your Go bin directory (`$env:GOPATH\bin`, or `$env:USERPROFILE\go\bin` if `GOPATH` is unset). Make sure that directory is on `$env:PATH`.
+
+**Build from source:**
+
+```powershell
+git clone https://github.com/shtirlitsDva/revdiff
+cd revdiff
+.\build.ps1
+```
+
+The `build.ps1` script is the PowerShell mirror of `make build` and produces `.\.bin\revdiff.exe`.
+
+Verify the install:
+
+```powershell
+Get-Command revdiff
+revdiff --version
+```
 
 ## Claude Code Plugin
 
-```bash
-/plugin marketplace add umputun/revdiff
-/plugin install revdiff@umputun-revdiff
+```
+/plugin marketplace add shtirlitsDva/revdiff
+/plugin install revdiff@revdiff
 ```
 
-Use: `/revdiff [base] [against]` — opens review session in a terminal overlay (tmux, kitty, wezterm, cmux, ghostty, iTerm2, or Emacs vterm).
+Use: `/revdiff [base] [against]` — opens the review session in a WezTerm split pane next to the pane running Claude Code.
 
-On Windows, both the `revdiff` and `revdiff-planning` plugins work under WezTerm. The Windows launcher uses `wezterm cli spawn --new-tab` to open revdiff in a new tab of the current WezTerm window. WezTerm is the only supported Windows terminal.
+The plugin's launcher requires WezTerm. `wezterm.exe` must be on `$env:PATH`, and the Claude Code session must itself run inside a WezTerm pane (the launcher reads `$env:WEZTERM_PANE` to anchor the split).
 
 ### Plan Review Plugin
 
 Automatically opens revdiff when Claude exits plan mode for interactive annotation:
 
-```bash
-/plugin install revdiff-planning@umputun-revdiff
 ```
+/plugin install revdiff-planning@revdiff
+```
+
+### Launcher scripts
+
+The `revdiff` skill ships with two PowerShell launcher scripts under `.claude-plugin/skills/revdiff/scripts/`:
+
+| Script | Purpose |
+|---|---|
+| `launch-revdiff.ps1` | Spawns revdiff in a WezTerm split pane, captures the annotation output file, and prints annotations to stdout. |
+| `detect-ref.ps1` | Inspects the current git repo and emits structured fields describing what ref the skill should diff against. |
+
+Both scripts are invoked via:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:CLAUDE_SKILL_DIR\scripts\<script>.ps1" [args...]
+```
+
+The launcher exits with an error if `wezterm.exe` is not on PATH or `$env:WEZTERM_PANE` is unset, so Claude Code must be running inside a WezTerm pane for the plugin to work.
+
+The launcher also supports a **fork-only `--view=<path>` flag** (not a revdiff flag — it is intercepted by the launcher) that pipes the named file into `revdiff --stdin --stdin-name=<basename>`. This lets you annotate a tracked-clean file that has no diff, which `--only=<path>` cannot render.
