@@ -72,6 +72,26 @@ sudo rpm -i revdiff_*.rpm
 
 **Binary releases:** download from [GitHub Releases](https://github.com/umputun/revdiff/releases) (deb, rpm, archives for linux/darwin amd64/arm64).
 
+### Windows (this fork)
+
+This fork (`shtirlitsDva/revdiff`) targets **Windows 10/11 only**, with [WezTerm](https://wezfurlong.org/wezterm/) as the validated terminal. Other Windows terminals (cmd.exe, Windows Terminal, ConEmu, mintty) are not tested and may have rendering issues. For Unix, use upstream [`umputun/revdiff`](https://github.com/umputun/revdiff).
+
+Install via Go:
+
+```powershell
+go install github.com/shtirlitsDva/revdiff/app@latest
+```
+
+This produces `revdiff.exe` (originally `app.exe`; rename if needed) under `%USERPROFILE%\go\bin` — make sure that directory is on your `PATH`.
+
+Or build from a local checkout with PowerShell:
+
+```powershell
+.\build.ps1
+```
+
+This produces `.bin\revdiff.exe`. Run the test suite with `.\test.ps1`. `git` must be on `PATH` for diff, blame, ref-detection, and `--compare-old/--compare-new` to work.
+
 ## Claude Code Plugin
 
 revdiff ships with a Claude Code plugin for interactive code review directly from a Claude session. The plugin launches revdiff as a terminal overlay, captures annotations, and feeds them back to Claude for processing.
@@ -428,6 +448,7 @@ All color options accept hex values (`#rrggbb`) and have corresponding `REVDIFF_
 | `--color-status-bg` | Status bar background | `#C5794F` |
 | `--color-search-fg` | Search match text | `#1a1a1a` |
 | `--color-search-bg` | Search match background | `#4a4a00` |
+| `--color-table-code` | Markdown-table inline `` `code` `` text | `#87afd7` |
 
 </details>
 
