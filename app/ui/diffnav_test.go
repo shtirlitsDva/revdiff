@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/annotation"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/keymap"
-	"github.com/umputun/revdiff/app/ui/sidepane"
+	"github.com/shtirlitsDva/revdiff/app/annotation"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/keymap"
+	"github.com/shtirlitsDva/revdiff/app/ui/sidepane"
 )
 
 func TestModel_NextPrevFile(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 
 	"github.com/mattn/go-runewidth"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/ui/style"
 )
 
 // xmlOpenTagRe matches an opening XML-style structural heading that lives

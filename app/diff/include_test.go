@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/diff/mocks"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/diff/mocks"
 )
 
 func TestIncludeFilter_ChangedFiles(t *testing.T) {

@@ -6,8 +6,8 @@ package sidepane
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/ui/style"
 )
 
 // motion is the generator input for Motion (see generated motion_enum.go).

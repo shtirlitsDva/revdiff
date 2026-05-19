@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/annotation"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/sidepane"
+	"github.com/shtirlitsDva/revdiff/app/annotation"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/ui/overlay"
+	"github.com/shtirlitsDva/revdiff/app/ui/sidepane"
 )
 
 func TestModel_statusBarHeight(t *testing.T) {

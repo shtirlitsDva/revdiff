@@ -3,7 +3,7 @@ import (
 "regexp"
 "strings"
 "github.com/charmbracelet/x/ansi"
-"github.com/umputun/revdiff/app/diff"
+"github.com/shtirlitsDva/revdiff/app/diff"
 )
 // cellAlign captures GFM column alignment from the separator row.
 type cellAlign int

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/diff"
 )
 
 // trySymlink creates a symlink and returns true on success. This fork is

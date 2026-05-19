@@ -8,9 +8,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/review"
-	"github.com/umputun/revdiff/app/ui/overlay"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/review"
+	"github.com/shtirlitsDva/revdiff/app/ui/overlay"
 )
 
 // setReviewEntries records the per-file portion of the review-info summary

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/ui/sidepane"
+	"github.com/shtirlitsDva/revdiff/app/ui/sidepane"
 )
 
 // buildPaneRender returns a synthetic lipgloss-shaped pane render with vh

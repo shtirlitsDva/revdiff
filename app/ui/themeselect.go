@@ -3,8 +3,8 @@ package ui
 import (
 	"log"
 
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/shtirlitsDva/revdiff/app/ui/overlay"
+	"github.com/shtirlitsDva/revdiff/app/ui/style"
 )
 
 // themePreviewSession holds app-side state for an active theme selector session.

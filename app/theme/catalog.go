@@ -16,8 +16,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/umputun/revdiff/app/fsutil"
-	"github.com/umputun/revdiff/themes"
+	"github.com/shtirlitsDva/revdiff/app/fsutil"
+	"github.com/shtirlitsDva/revdiff/themes"
 )
 
 // themeInfo holds classification metadata for a theme in an ordered listing.

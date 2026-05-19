@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/umputun/revdiff/app/keymap"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/shtirlitsDva/revdiff/app/keymap"
+	"github.com/shtirlitsDva/revdiff/app/ui/style"
 )
 
 const (

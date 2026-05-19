@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/umputun/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/diff"
 )
 
 // maxUntrackedBytes bounds the per-file size for untracked-content reads

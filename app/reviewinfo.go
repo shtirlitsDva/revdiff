@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/ui"
 )
 
 // maxDescriptionFileSize bounds --description-file reads. The popup is meant

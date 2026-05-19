@@ -25,15 +25,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/umputun/revdiff/app/annotation"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/editor"
-	"github.com/umputun/revdiff/app/keymap"
-	"github.com/umputun/revdiff/app/review"
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/sidepane"
-	"github.com/umputun/revdiff/app/ui/style"
-	"github.com/umputun/revdiff/app/ui/worddiff"
+	"github.com/shtirlitsDva/revdiff/app/annotation"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/editor"
+	"github.com/shtirlitsDva/revdiff/app/keymap"
+	"github.com/shtirlitsDva/revdiff/app/review"
+	"github.com/shtirlitsDva/revdiff/app/ui/overlay"
+	"github.com/shtirlitsDva/revdiff/app/ui/sidepane"
+	"github.com/shtirlitsDva/revdiff/app/ui/style"
+	"github.com/shtirlitsDva/revdiff/app/ui/worddiff"
 )
 
 // Renderer provides methods to extract changed files and build diff views.

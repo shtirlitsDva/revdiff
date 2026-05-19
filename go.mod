@@ -1,4 +1,4 @@
-module github.com/umputun/revdiff
+module github.com/shtirlitsDva/revdiff
 
 go 1.26
 

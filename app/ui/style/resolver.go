@@ -3,7 +3,7 @@ package style
 import (
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/umputun/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/diff"
 )
 
 // Resolver holds pre-materialized color and lipgloss style tables

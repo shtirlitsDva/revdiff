@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/umputun/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/diff"
 )
 
 // ctx builds a slice of ChangeContext diff lines from raw content strings.

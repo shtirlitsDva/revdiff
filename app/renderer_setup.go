@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/ui"
 )
 
 type vcsSetup struct {

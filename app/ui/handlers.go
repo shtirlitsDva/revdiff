@@ -5,9 +5,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/umputun/revdiff/app/keymap"
-	"github.com/umputun/revdiff/app/ui/overlay"
-	"github.com/umputun/revdiff/app/ui/sidepane"
+	"github.com/shtirlitsDva/revdiff/app/keymap"
+	"github.com/shtirlitsDva/revdiff/app/ui/overlay"
+	"github.com/shtirlitsDva/revdiff/app/ui/sidepane"
 )
 
 // helpKeyDisplay maps bubbletea key names to user-friendly display names.

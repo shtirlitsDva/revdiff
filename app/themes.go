@@ -9,11 +9,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/umputun/revdiff/app/fsutil"
-	"github.com/umputun/revdiff/app/highlight"
-	"github.com/umputun/revdiff/app/theme"
-	"github.com/umputun/revdiff/app/ui"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/shtirlitsDva/revdiff/app/fsutil"
+	"github.com/shtirlitsDva/revdiff/app/highlight"
+	"github.com/shtirlitsDva/revdiff/app/theme"
+	"github.com/shtirlitsDva/revdiff/app/ui"
+	"github.com/shtirlitsDva/revdiff/app/ui/style"
 )
 
 // defaultThemesDir returns %APPDATA%\revdiff\themes.

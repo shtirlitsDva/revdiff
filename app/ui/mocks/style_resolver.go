@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/umputun/revdiff/app/diff"
-	"github.com/umputun/revdiff/app/ui/style"
+	"github.com/shtirlitsDva/revdiff/app/diff"
+	"github.com/shtirlitsDva/revdiff/app/ui/style"
 )
 
 // styleResolverMock is a mock implementation of ui.styleResolver.
