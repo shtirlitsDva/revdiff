@@ -110,7 +110,7 @@ Use `--stdin` to review arbitrary piped or redirected text as one synthetic file
 | `t` | Toggle tree/TOC pane visibility (gives diff full terminal width) |
 | `L` | Toggle line numbers (side-by-side old/new numbers in gutter) |
 | `B` | Toggle git blame gutter (author name + commit age per line) |
-| `|` | Toggle markdown table reformatting (column-aligned cells; default-on for `.md` files). Upstream bound `T` to `--theme-select` after this fork diverged, so the table toggle moved to `|`. |
+| `T` | Toggle markdown table reformatting (column-aligned cells; default-on for `.md` files). Fork preserved `T` for table mode; the upstream `--theme-select` binding is moved to `ctrl+t` here. |
 | `.` | Expand/collapse individual hunk under cursor (collapsed mode only) |
 | `f` | Toggle filter: all files / annotated only |
 | `?` | Toggle help overlay showing all keybindings |
