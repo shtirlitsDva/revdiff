@@ -86,6 +86,7 @@ type options struct {
 		StatusBg     string `long:"color-status-bg"   ini-name:"color-status-bg"   env:"REVDIFF_COLOR_STATUS_BG"   default:"#C5794F" description:"status bar background"`
 		SearchFg     string `long:"color-search-fg"   ini-name:"color-search-fg"   env:"REVDIFF_COLOR_SEARCH_FG"   default:"#1a1a1a" description:"search match foreground"`
 		SearchBg     string `long:"color-search-bg"   ini-name:"color-search-bg"   env:"REVDIFF_COLOR_SEARCH_BG"   default:"#4a4a00" description:"search match background"`
+		TableCode    string `long:"color-table-code"  ini-name:"color-table-code"  env:"REVDIFF_COLOR_TABLE_CODE"  default:"#87afd7" description:"markdown table inline code text color"`
 	} `group:"color options"`
 
 	compareAbsOld string
@@ -225,20 +226,22 @@ func resolveFlagPath(args []string, flag, envVar string, defaultFn func() string
 	return defaultFn()
 }
 
-// defaultConfigPath returns ~/.config/revdiff/config.
+// defaultConfigPath returns %APPDATA%\revdiff\config.
+// This fork is Windows-only — os.UserConfigDir() resolves to %APPDATA%.
 func defaultConfigPath() string {
-	home, err := os.UserHomeDir()
+	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "revdiff", "config")
+	return filepath.Join(dir, "revdiff", "config")
 }
 
-// defaultKeysPath returns ~/.config/revdiff/keybindings.
+// defaultKeysPath returns %APPDATA%\revdiff\keybindings.
+// This fork is Windows-only — os.UserConfigDir() resolves to %APPDATA%.
 func defaultKeysPath() string {
-	home, err := os.UserHomeDir()
+	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "revdiff", "keybindings")
+	return filepath.Join(dir, "revdiff", "keybindings")
 }

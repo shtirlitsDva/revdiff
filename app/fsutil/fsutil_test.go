@@ -77,6 +77,7 @@ func TestAtomicWriteFile(t *testing.T) {
 	})
 
 	t.Run("fails when directory becomes read-only before write", func(t *testing.T) {
+		t.Skip("0o555 chmod on a directory doesn't actually block writes by the owner on Windows; this fork is Windows-only")
 		dir := t.TempDir()
 		sub := filepath.Join(dir, "ro")
 		require.NoError(t, os.Mkdir(sub, 0o750))

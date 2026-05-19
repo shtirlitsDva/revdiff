@@ -155,7 +155,11 @@ func TestCountFileLines_MissingFile(t *testing.T) {
 // TestCompareReader_FileDiff_PathsWithColons confirms paths containing ':'
 // (e.g. ISO timestamps) round-trip cleanly under the two-flag form. The OG
 // --compare=old:new bug is killed by the flag shape change; this test pins it.
-func TestCompareReader_FileDiff_PathsWithColons(t *testing.T) {
+func TestCompareReader_FileDiff_PathsWithColons_DISABLED(t *testing.T) {
+	// Disabled: colons are reserved in Windows filenames and this fork is Windows-only.
+	// Upstream's regression-pin for paths-with-colons is exercised by the original
+	// project on Unix CI — see umputun/revdiff.
+	t.Skip()
 	dir := t.TempDir()
 	oldPath := filepath.Join(dir, "2026-05-01T12:30:00.md")
 	newPath := filepath.Join(dir, "2026-05-01T13:00:00.md")
@@ -273,8 +277,12 @@ func TestCompareReader_FileDiff_Symlinks(t *testing.T) {
 
 	linkOld := filepath.Join(dir, "link-old.txt")
 	linkNew := filepath.Join(dir, "link-new.txt")
-	require.NoError(t, os.Symlink(realOld, linkOld))
-	require.NoError(t, os.Symlink(realNew, linkNew))
+	if !trySymlink(t, realOld, linkOld) {
+		return
+	}
+	if !trySymlink(t, realNew, linkNew) {
+		return
+	}
 
 	countAddRemove := func(t *testing.T, lines []DiffLine) (adds, removes int) {
 		t.Helper()

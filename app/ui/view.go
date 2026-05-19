@@ -445,6 +445,7 @@ func (m Model) statusModeIcons() string {
 		{"±", m.modes.wordDiff},
 		{"✓", m.tree.ReviewedCount() > 0},
 		{"∅", m.modes.showUntracked},
+		{"▦", m.modes.tableMode},
 	}
 
 	mutedSeq := string(m.resolver.Color(style.ColorKeyMutedFg))

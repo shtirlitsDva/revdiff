@@ -16,13 +16,14 @@ import (
 	"github.com/umputun/revdiff/app/ui/style"
 )
 
-// defaultThemesDir returns ~/.config/revdiff/themes.
+// defaultThemesDir returns %APPDATA%\revdiff\themes.
+// This fork is Windows-only — os.UserConfigDir() resolves to %APPDATA%.
 func defaultThemesDir() string {
-	home, err := os.UserHomeDir()
+	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "revdiff", "themes")
+	return filepath.Join(dir, "revdiff", "themes")
 }
 
 // handleThemes processes theme-related flags: auto-init on first run, --init-themes, --init-all-themes,
@@ -115,6 +116,7 @@ func colorFieldPtrs(opts *options) map[string]*string {
 		"color-status-bg":      &opts.Colors.StatusBg,
 		"color-search-fg":      &opts.Colors.SearchFg,
 		"color-search-bg":      &opts.Colors.SearchBg,
+		"color-table-code":     &opts.Colors.TableCode,
 	}
 }
 

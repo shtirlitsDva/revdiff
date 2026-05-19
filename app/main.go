@@ -214,6 +214,7 @@ func run(opts options) error {
 		WorkDir:          workDir,
 		ActiveThemeName:  themes.catalog.ActiveName(opts.Theme),
 		AnnotationMarker: opts.AnnotationMarker,
+		TableCodeFg:      opts.Colors.TableCode,
 		NewFileTree: func(entries []diff.FileEntry) ui.FileTreeComponent {
 			return sidepane.NewFileTree(entries)
 		},

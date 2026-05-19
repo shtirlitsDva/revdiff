@@ -5,9 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,9 +24,11 @@ func writeTempAnnotations(t *testing.T, body string) string {
 }
 
 func TestParseArgs_AnnotationsFlag(t *testing.T) {
-	opts, err := parseArgs(append(noConfigArgs(t), "--annotations", "/tmp/notes.md"))
+	// use platform-correct path (Windows go-flags rejects /-prefixed as flag)
+	notes := filepath.Join(t.TempDir(), "notes.md")
+	opts, err := parseArgs(append(noConfigArgs(t), "--annotations", notes))
 	require.NoError(t, err)
-	assert.Equal(t, "/tmp/notes.md", opts.Annotations)
+	assert.Equal(t, notes, opts.Annotations)
 }
 
 func TestParseArgs_AnnotationsDefaultEmpty(t *testing.T) {
@@ -231,20 +231,8 @@ func TestPreloadAnnotations_UntrackedListError(t *testing.T) {
 	assert.Contains(t, warn.String(), "list untracked files")
 }
 
-func TestPreloadAnnotations_RejectsNonRegularFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("FIFO not portable")
-	}
-	dir := t.TempDir()
-	fifo := filepath.Join(dir, "fifo")
-	require.NoError(t, syscall.Mkfifo(fifo, 0o600))
-
-	store := annotation.NewStore()
-	r := &mocks.RendererMock{}
-	err := preloadAnnotations(fifo, store, r, "", false, nil, "", &bytes.Buffer{})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not a regular file")
-}
+// TestPreloadAnnotations_RejectsNonRegularFile lives in annotations_load_unix_test.go —
+// it needs syscall.Mkfifo to set up the FIFO and that doesn't exist on Windows.
 
 func TestPreloadAnnotations_RejectsOversizeFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "big.md")

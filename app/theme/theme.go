@@ -26,6 +26,7 @@ var colorKeys = []string{
 	"color-tree-bg", "color-diff-bg",
 	"color-status-fg", "color-status-bg",
 	"color-search-fg", "color-search-bg",
+	"color-table-code",
 }
 
 // optionalColorKeys lists color keys that may be omitted from theme files.
@@ -39,6 +40,7 @@ var optionalColorKeys = map[string]bool{
 	"color-word-remove-bg": true,
 	"color-status-fg":      true,
 	"color-status-bg":      true,
+	"color-table-code":     true, // markdown-table inline code falls back to plain text
 }
 
 // Theme represents a color theme with metadata and color key-value pairs.

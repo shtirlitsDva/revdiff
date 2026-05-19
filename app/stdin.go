@@ -67,10 +67,19 @@ func stdinName(name string) string {
 	return name
 }
 
+// openTTY opens the controlling terminal for interactive input.
+// This fork is Windows-only — `CONIN$` is the Windows console device, which
+// stays openable even when stdin has been redirected to a pipe (as in
+// `--stdin` mode).
+//
+// O_RDWR is required, not O_RDONLY. Bubble Tea calls term.MakeRaw on the
+// returned handle, which on Windows invokes SetConsoleMode; that API returns
+// ERROR_ACCESS_DENIED when the handle was opened read-only. Read-write is
+// safe here: every process can already set its own console's mode.
 func openTTY() (*os.File, error) {
-	tty, err := os.Open("/dev/tty")
+	tty, err := os.OpenFile("CONIN$", os.O_RDWR, 0)
 	if err != nil {
-		return nil, fmt.Errorf("open /dev/tty: %w", err)
+		return nil, fmt.Errorf("open CONIN$: %w", err)
 	}
 	return tty, nil
 }

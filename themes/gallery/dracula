@@ -25,3 +25,4 @@ color-status-fg = #282a36
 color-status-bg = #bd93f9
 color-search-fg = #282a36
 color-search-bg = #f1fa8c
+color-table-code = #8be9fd

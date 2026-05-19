@@ -186,18 +186,18 @@ func TestCollectColors(t *testing.T) {
 	assert.Equal(t, "#D5895F", colors["color-accent"])
 	assert.Equal(t, "#585858", colors["color-border"])
 	assert.Equal(t, "#87d787", colors["color-add-fg"])
-	// 5 optional keys (cursor-bg, tree-bg, diff-bg, word-add-bg, word-remove-bg) have no default and are omitted
-	assert.Len(t, colors, 18)
+	// 5 optional keys (cursor-bg, tree-bg, diff-bg, word-add-bg, word-remove-bg) have no default and are omitted; color-table-code has a default and is included
+	assert.Len(t, colors, 19)
 	assert.Empty(t, colors["color-cursor-bg"])
 	assert.Empty(t, colors["color-tree-bg"])
 	assert.Empty(t, colors["color-diff-bg"])
 }
 
 func TestColorFieldPtrs(t *testing.T) {
-	t.Run("returns 23 entries", func(t *testing.T) {
+	t.Run("returns 24 entries", func(t *testing.T) {
 		opts := options{}
 		ptrs := colorFieldPtrs(&opts)
-		assert.Len(t, ptrs, 23)
+		assert.Len(t, ptrs, 24)
 	})
 
 	t.Run("pointers write to correct fields", func(t *testing.T) {
@@ -520,8 +520,8 @@ func TestHandleThemes_NoOp(t *testing.T) {
 }
 
 func TestDefaultThemesDir(t *testing.T) {
+	// Windows-only fork: dir is %APPDATA%\revdiff\themes
 	dir := defaultThemesDir()
-	assert.Contains(t, dir, ".config")
 	assert.Contains(t, dir, "revdiff")
 	assert.Contains(t, dir, "themes")
 }

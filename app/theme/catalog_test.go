@@ -283,7 +283,7 @@ func TestValidateHexColor(t *testing.T) {
 
 func TestOptionalColorKeys(t *testing.T) {
 	opt := NewCatalog("").OptionalColorKeys()
-	assert.Len(t, opt, 7)
+	assert.Len(t, opt, 8)
 	assert.True(t, opt["color-cursor-bg"])
 	assert.True(t, opt["color-tree-bg"])
 	assert.True(t, opt["color-diff-bg"])
@@ -291,6 +291,7 @@ func TestOptionalColorKeys(t *testing.T) {
 	assert.True(t, opt["color-word-remove-bg"])
 	assert.True(t, opt["color-status-fg"])
 	assert.True(t, opt["color-status-bg"])
+	assert.True(t, opt["color-table-code"])
 
 	// verify it returns a copy
 	opt["color-accent"] = true
@@ -368,6 +369,7 @@ func Test_load_pathTraversal(t *testing.T) {
 }
 
 func Test_load_permissionError(t *testing.T) {
+	t.Skip("0o000 file permissions don't block the owner on Windows and this fork is Windows-only")
 	dir := t.TempDir()
 	fpath := filepath.Join(dir, "secret-theme")
 	require.NoError(t, os.WriteFile(fpath, []byte("chroma-style = dracula\n"), 0o000))

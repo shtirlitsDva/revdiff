@@ -277,11 +277,16 @@ func (m Model) handleFileLoaded(msg fileLoadedMsg) (tea.Model, tea.Cmd) {
 	m.layout.scrollX = 0
 	m.modes.collapsed.expandedHunks = make(map[int]bool)
 
+	// auto-enable table mode for markdown files on load. recompute either way
+	// so a stale slice from a previous file doesn't bleed into the new one.
+	m.modes.tableMode = m.isMarkdownFile(msg.file)
+	m.recomputeTableFormatted()
+
 	m.file.singleColLineNum = m.isFullContext(msg.lines)
 
 	// detect markdown full-context mode and build TOC
 	m.file.mdTOC = nil
-	if m.file.singleFile && m.isMarkdownFile(msg.file) && m.file.singleColLineNum {
+	if m.file.singleFile && m.isTOCEligibleFile(msg.file) && m.file.singleColLineNum {
 		m.file.mdTOC = m.parseTOC(msg.lines, msg.file)
 	}
 	switch {
@@ -440,7 +445,9 @@ func (m Model) workDirRel(path string) string {
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return ""
 	}
-	return rel
+	// normalize to forward slashes so the comparison works on Windows where
+	// filepath.Rel returns OS-native separators but git-style file paths use /
+	return filepath.ToSlash(rel)
 }
 
 // computeFileStats counts added and removed lines in the current file.
@@ -491,6 +498,22 @@ func (m Model) isFullContext(lines []diff.DiffLine) bool {
 func (m Model) isMarkdownFile(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	return ext == ".md" || ext == ".markdown"
+}
+
+// isTOCEligibleFile checks whether the filename extension signals a document
+// format that could contain structural headings worth a TOC pane. Markdown
+// (.md, .markdown) uses ATX `#`-style headings; XML-family documents (.xml,
+// .xhtml) use tag nesting. Source code files are deliberately excluded —
+// their `#` characters are comment prefixes, not headings.
+// See CUSTOMIZATIONS.md for the rationale behind the extension gate.
+func (m Model) isTOCEligibleFile(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".md", ".markdown", ".xml", ".xhtml":
+		return true
+	default:
+		return false
+	}
 }
 
 // recomputeIntraRanges walks m.file.lines, finds contiguous change blocks,

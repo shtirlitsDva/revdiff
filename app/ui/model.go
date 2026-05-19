@@ -249,6 +249,7 @@ type loadedFileState struct {
 	loadSeq          uint64                 // monotonic counter to identify the latest load request
 	mdTOC            TOCComponent           // markdown table-of-contents (nil when not applicable)
 	singleFile       bool                   // true when diff contains exactly one file
+	tableFormatted   []string               // pre-computed markdown-table reformatted content, parallel to lines (empty = no override)
 }
 
 // modelConfigState holds immutable or near-immutable session configuration.
@@ -267,6 +268,7 @@ type modelConfigState struct {
 	wrapIndent       int      // extra indent (in columns) for wrap continuation rows; 0 disables
 	annotPrefix      string   // cached: marker + " "
 	annotFilePrefix  string   // cached: marker + " file: "
+	tableCodeFg      string   // hex color for markdown-table inline `code` text; empty disables code coloring
 }
 
 // layoutState holds viewport and layout concerns that change on resize and pane toggles.
@@ -292,6 +294,7 @@ type modeState struct {
 	compact        bool           // true when diffs are fetched with small context around changes
 	compactContext int            // number of context lines around changes when compact is enabled
 	vimMotion      bool           // true when the --vim-motion preset is active (gates the vim-motion interceptor in handleKey)
+	tableMode      bool           // true when markdown-table column reformatting is active
 }
 
 // navigationState holds cursor and navigation-adjacent state.
@@ -655,6 +658,10 @@ type ModelConfig struct {
 	// AnnotationMarker is the prefix shown before annotation lines.
 	// Empty is preserved so callers can intentionally render no marker.
 	AnnotationMarker string
+	// TableCodeFg is the hex color applied to inline `code` text inside
+	// rendered markdown tables. Empty disables code coloring (tables still
+	// render, but inline code falls back to plain text).
+	TableCodeFg string
 	// ReviewInfo populates the review-info overlay with invocation scope, filters, and
 	// aggregate file/line stats. Pass nil to preserve the legacy commit-only popup
 	// behavior used by focused tests — every derived path (footer, rows, stats
@@ -755,6 +762,7 @@ func NewModel(cfg ModelConfig) (Model, error) {
 			wrapIndent:       max(0, cfg.WrapIndent),
 			annotPrefix:      cfg.AnnotationMarker + " ",
 			annotFilePrefix:  cfg.AnnotationMarker + " file: ",
+			tableCodeFg:      cfg.TableCodeFg,
 		},
 		layout: layoutState{
 			focus: paneTree,
@@ -942,7 +950,8 @@ func (m Model) dispatchAction(action keymap.Action) (tea.Model, tea.Cmd) {
 	case keymap.ActionMarkReviewed:
 		return m.handleMarkReviewed()
 	case keymap.ActionToggleCollapsed, keymap.ActionToggleCompact, keymap.ActionToggleWrap, keymap.ActionToggleTree,
-		keymap.ActionToggleLineNums, keymap.ActionToggleBlame, keymap.ActionToggleWordDiff, keymap.ActionToggleUntracked:
+		keymap.ActionToggleLineNums, keymap.ActionToggleBlame, keymap.ActionToggleWordDiff, keymap.ActionToggleUntracked,
+		keymap.ActionToggleTable:
 		return m.handleViewToggle(action)
 	case keymap.ActionNextHunk, keymap.ActionPrevHunk:
 		return m.handleHunkNav(action == keymap.ActionNextHunk)
@@ -1266,6 +1275,8 @@ func (m Model) handleViewToggle(action keymap.Action) (tea.Model, tea.Cmd) {
 	case keymap.ActionToggleCompact:
 		cmd := m.toggleCompactMode()
 		return m, cmd
+	case keymap.ActionToggleTable:
+		m.toggleTableMode()
 	default:
 		return m, nil
 	}
@@ -1282,7 +1293,32 @@ func (m *Model) toggleWrapMode() {
 	if m.modes.wrap {
 		m.layout.scrollX = 0
 	}
+	// wrap mode disables table reformatting (alignment + soft-wrap is incoherent).
+	// recompute either way so toggling wrap clears or restores the formatted slice.
+	m.recomputeTableFormatted()
 	m.syncViewportToCursor()
+}
+
+// toggleTableMode toggles markdown-table reformatting on/off and recomputes
+// the parallel tableFormatted slice. Mirrors the wrap/blame/lineNumbers toggle
+// pattern.
+func (m *Model) toggleTableMode() {
+	if m.layout.focus != paneDiff || m.file.name == "" {
+		return
+	}
+	m.modes.tableMode = !m.modes.tableMode
+	m.recomputeTableFormatted()
+	m.syncViewportToCursor()
+}
+
+// recomputeTableFormatted (re)builds m.file.tableFormatted from the current
+// diffLines. Clears the slice when tableMode is off or wrapMode is on.
+func (m *Model) recomputeTableFormatted() {
+	if !m.modes.tableMode || m.modes.wrap || len(m.file.lines) == 0 {
+		m.file.tableFormatted = nil
+		return
+	}
+	m.file.tableFormatted = BuildTableFormatted(m.file.lines, style.AnsiFg(m.cfg.tableCodeFg))
 }
 
 func (m Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {

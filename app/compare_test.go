@@ -110,7 +110,7 @@ func TestParseArgs_CompareConflicts(t *testing.T) {
 		{name: "stdin", args: append(append([]string{}, common...), "--stdin"), want: "--compare-old/--compare-new cannot be used with --stdin"},
 		{name: "include", args: append(append([]string{}, common...), "--include", "src"), want: "--compare-old/--compare-new cannot be used with --include"},
 		{name: "exclude", args: append(append([]string{}, common...), "--exclude", "vendor"), want: "--compare-old/--compare-new cannot be used with --exclude"},
-		{name: "annotations", args: append(append([]string{}, common...), "--annotations", "/tmp/a.md"), want: "--compare-old/--compare-new cannot be used with --annotations"},
+		{name: "annotations", args: append(append([]string{}, common...), "--annotations", filepath.Join(dir, "a.md")), want: "--compare-old/--compare-new cannot be used with --annotations"},
 	}
 
 	for _, tt := range tests {

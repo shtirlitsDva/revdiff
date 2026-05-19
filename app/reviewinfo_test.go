@@ -3,8 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"runtime"
-	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -136,20 +134,8 @@ func TestResolveDescription(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mutually exclusive")
 	})
-
-	t.Run("description-file pointing at a FIFO is rejected", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("FIFOs not supported on Windows")
-		}
-		dir := t.TempDir()
-		fifo := filepath.Join(dir, "pipe")
-		if err := syscall.Mkfifo(fifo, 0o600); err != nil {
-			t.Skipf("mkfifo unsupported: %v", err)
-		}
-		_, err := resolveDescription(options{DescriptionFile: fifo})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "regular file")
-	})
+	// "description-file pointing at a FIFO is rejected" lives in
+	// reviewinfo_unix_test.go — syscall.Mkfifo is Unix-only.
 }
 
 func TestParseArgs_DescriptionMutuallyExclusive(t *testing.T) {

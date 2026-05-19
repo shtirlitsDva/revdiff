@@ -3,6 +3,7 @@ package sidepane
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/mattn/go-runewidth"
@@ -10,6 +11,18 @@ import (
 	"github.com/umputun/revdiff/app/diff"
 	"github.com/umputun/revdiff/app/ui/style"
 )
+
+// xmlOpenTagRe matches an opening XML-style structural heading that lives
+// alone on its own trimmed line, e.g. `<overview>` or `<example type="good">`.
+// Group 1 is the tag name (attributes are ignored). Self-closing forms like
+// `<br/>` are excluded by the `HasSuffix("/>")` pre-check in ParseTOC, not by
+// this regex. Comments (`<!--`), doctypes, and PIs are excluded because the
+// first-char class is `[a-zA-Z]`.
+var xmlOpenTagRe = regexp.MustCompile(`^<([a-zA-Z][a-zA-Z0-9_-]*)(?:\s[^>]*)?>$`)
+
+// xmlCloseTagRe matches a closing XML-style structural heading that lives
+// alone on its own trimmed line, e.g. `</overview>`. Group 1 is the tag name.
+var xmlCloseTagRe = regexp.MustCompile(`^</([a-zA-Z][a-zA-Z0-9_-]*)\s*>$`)
 
 // TOC manages the markdown table-of-contents navigation pane.
 type TOC struct {
@@ -27,14 +40,27 @@ type tocEntry struct {
 }
 
 // ParseTOC scans diff lines for markdown headers and builds a TOC.
-// headers inside fenced code blocks (```) are excluded.
-// fence tracking is CommonMark-compliant: closing fence must use the same character
-// with at least the same length as the opening fence.
-// returns nil when no headers are found.
+// Headers inside fenced code blocks (``` / ~~~) and indented code blocks
+// (4+ leading spaces or a leading tab, per CommonMark) are excluded.
+// Fence tracking is CommonMark-compliant: closing fence must use the same
+// character with at least the same length as the opening fence.
+//
+// Two heading syntaxes are recognized and may coexist in the same document:
+//
+//  1. Standard CommonMark ATX headers: `^#{1,6} Title` — level = prefix count.
+//  2. Fork-specific XML-style structural headings: `<tag>` alone on its own
+//     trimmed line. Level is determined by XML nesting depth via a tag stack.
+//     On `</tag>` the stack is popped tolerantly (pops down to the first
+//     matching open tag; a bogus close with no match in the stack is silently
+//     ignored). Self-closing forms (`<br/>`), comments, PIs, and doctypes are
+//     ignored. See CUSTOMIZATIONS.md for rationale.
+//
+// Returns nil when no headers are found.
 func ParseTOC(lines []diff.DiffLine, filename string) *TOC {
 	entries := make([]tocEntry, 0, len(lines))
 	var fenceChar rune // 0 when outside code block, '`' or '~' when inside
 	var fenceLen int   // length of the opening fence sequence
+	var xmlStack []string
 
 	for i, line := range lines {
 		if line.ChangeType == diff.ChangeDivider {
@@ -63,6 +89,44 @@ func ParseTOC(lines []diff.DiffLine, filename string) *TOC {
 		}
 		if fenceChar != 0 {
 			continue
+		}
+
+		// CommonMark indented code block guard: a line with 4+ leading spaces
+		// (or a leading tab) outside any fence is a code block — its content
+		// must not count as a heading. This protects against false-positive
+		// XML tags in pasted code examples that weren't placed inside fences.
+		if isIndentedCodeLine(content) {
+			continue
+		}
+
+		// XML close tag: pop stack tolerantly. If the closing tag name doesn't
+		// appear in the stack at all, silently ignore — keeps mis-structured
+		// docs producing a best-effort TOC rather than failing.
+		if m := xmlCloseTagRe.FindStringSubmatch(trimmed); m != nil {
+			tagName := m[1]
+			for j := len(xmlStack) - 1; j >= 0; j-- {
+				if xmlStack[j] == tagName {
+					xmlStack = xmlStack[:j]
+					break
+				}
+			}
+			continue
+		}
+
+		// XML open tag (excluding self-closing forms): emit TOC entry at the
+		// current nesting depth + 1, then push onto the stack. Level is capped
+		// at 6 for display consistency with #-style headers.
+		if !strings.HasSuffix(trimmed, "/>") {
+			if m := xmlOpenTagRe.FindStringSubmatch(trimmed); m != nil {
+				tagName := m[1]
+				level := len(xmlStack) + 1
+				if level > 6 {
+					level = 6
+				}
+				entries = append(entries, tocEntry{title: tagName, level: level, lineIdx: i})
+				xmlStack = append(xmlStack, tagName)
+				continue
+			}
 		}
 
 		// check for markdown header: ^#{1,6} (space required after last #)
@@ -261,6 +325,29 @@ func (t *TOC) truncateTitle(title string, maxWidth int) string {
 		end = i + 1
 	}
 	return string(runes[:end]) + "…"
+}
+
+// isIndentedCodeLine reports whether a line's leading whitespace makes it a
+// CommonMark indented code block: 4+ leading spaces, or a leading tab. Lines
+// that are purely whitespace return false so blank lines don't mask real
+// content ahead.
+func isIndentedCodeLine(s string) bool {
+	spaces := 0
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch ch {
+		case ' ':
+			spaces++
+			if spaces >= 4 {
+				return true
+			}
+		case '\t':
+			return true
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 // fencePrefix returns the fence character ('`' or '~') and count of leading consecutive

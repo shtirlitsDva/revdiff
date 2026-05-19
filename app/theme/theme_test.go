@@ -77,7 +77,7 @@ func TestDump_canonicalOrder(t *testing.T) {
 }
 
 func Test_colorKeys(t *testing.T) {
-	assert.Len(t, colorKeys, 23)
+	assert.Len(t, colorKeys, 24)
 	assert.Equal(t, "color-accent", colorKeys[0])
-	assert.Equal(t, "color-search-bg", colorKeys[len(colorKeys)-1])
+	assert.Equal(t, "color-table-code", colorKeys[len(colorKeys)-1])
 }
