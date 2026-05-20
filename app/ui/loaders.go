@@ -183,6 +183,12 @@ func (m Model) handleFilesLoaded(msg filesLoadedMsg) (tea.Model, tea.Cmd) {
 	}
 	m.filesLoaded = true
 	if msg.err != nil {
+		// Log to stderr in addition to the TUI viewport so launcher-driven
+		// agents see the failure: without this, a `git diff` error inside
+		// the load is visible to the user but produces a clean exit-0 with
+		// no STDERR signal, leaving the agent unaware that the review
+		// could not actually happen.
+		log.Printf("[ERROR] loading files: %v", msg.err)
 		m.layout.viewport.SetContent(fmt.Sprintf("error loading files: %v", msg.err))
 		return m, nil
 	}
@@ -259,6 +265,9 @@ func (m Model) handleFileLoaded(msg fileLoadedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.err != nil {
+		// Same rationale as handleFilesLoaded: surface to stderr so a
+		// launcher-driven agent sees the failure, not just the user.
+		log.Printf("[ERROR] loading diff: %v", msg.err)
 		m.layout.viewport.SetContent(fmt.Sprintf("error loading diff: %v", msg.err))
 		return m, nil
 	}

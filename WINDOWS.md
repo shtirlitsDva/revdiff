@@ -205,6 +205,35 @@ patterns resolve correctly.
 
 </ui-only-flag>
 
+<ui-loaders-stderr>
+
+<example>
+
+`app/ui/loaders.go` — log loader errors to stderr in addition to
+the TUI viewport.
+
+When `handleFilesLoaded` or `handleFileLoaded` receives a non-nil
+`err` (typically a `git diff` / `git ls-files` failure), upstream
+displays the error in `m.layout.viewport` and exits 0 when the user
+quits. The error is visible to a human reader but invisible to any
+launcher-driven agent — the launcher sees a clean `[revdiff:EXIT
+code=0]` with no `STDERR` lines, and concludes the review was
+successful when in fact no files were loaded.
+
+The fork adds a one-line `log.Printf("[ERROR] loading files: %v",
+msg.err)` (and the analogous `loading diff` line) in each error
+branch. The default `log` package writes to stderr, which the
+Windows launcher captures via `2>"<stderrFile>"` and surfaces back
+to the agent as `[revdiff:STDERR] …`. POSIX users see the same
+benefit through their bash launcher's stderr handling.
+
+Two-line patch, behavior-neutral for human users, fixes a real
+silent-failure mode for agent users. Added in `1.3.0+win.4`.
+
+</example>
+
+</ui-loaders-stderr>
+
 <plan-review-hook-py>
 
 <example>

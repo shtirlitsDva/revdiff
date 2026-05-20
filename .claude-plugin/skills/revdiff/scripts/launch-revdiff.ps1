@@ -6,25 +6,17 @@
 # annotations to stdout.
 #
 # Usage:  launch-revdiff.ps1 [ref] [--staged] [--only=file1 ...]
-# Output (stdout, in arrival order):
-#   1. `[revdiff:STARTED] pane-id=<id>` — emitted as soon as the WezTerm
-#      split-pane is spawned. Proof the launcher reached the TUI-spawn step;
-#      if this line never arrives, the launcher crashed before that point.
-#   2. `[revdiff:EXIT code=<n>]` — emitted ONLY when revdiff itself returned
-#      a non-zero exit status. Surfaces inside-pane fast-failures (bad path,
-#      codepage mismatch, missing file, future regressions) that would
-#      otherwise look identical to "user reviewed and quit with zero
-#      annotations". When this line arrives, the agent MUST treat it as a
-#      hard error, not as user-approval.
-#   3. `[revdiff:STDERR] <line>` — emitted ONLY together with a non-zero EXIT,
-#      one prefixed line per non-empty stderr line captured from revdiff. Lets
-#      callers see *why* revdiff failed (unknown flag, missing file, etc.)
-#      without hand-rolling a debug .cmd wrapper. Suppressed when exit code is
-#      zero so a normal review session never leaks stderr noise into output.
-#   4. Annotation text from revdiff's --output file (empty if no annotations
-#      were written, which is the normal "quit without comments" case).
-# Callers parsing annotation output MUST strip lines matching `^\[revdiff:`
-# but MUST detect the EXIT line and surface STDERR diagnostics to the user.
+#
+# Stdout protocol (what we emit and when):
+#   STARTED (once, after the WezTerm split spawns)
+#   → annotation text from revdiff's --output file (verbatim, may be empty)
+#   → STDERR lines (zero or more, whenever revdiff's stderr captured content)
+#   → EXIT code=<n> (ALWAYS the final line, regardless of n)
+#
+# The full canonical protocol — including the agent-facing decision
+# table and recovery rules — lives in SKILL.md ("Launcher output
+# protocol" section, paired with its decision table). Keep the two in
+# sync when editing one; SKILL.md is the source of truth.
 #
 # Scope:
 #   The bash sibling (launch-revdiff.sh) supports tmux, kitty, wezterm, cmux,
@@ -367,45 +359,10 @@ try {
     }
 
     # -----------------------------------------------------------------------
-    # If revdiff itself returned non-zero, emit a `[revdiff:EXIT code=<n>]`
-    # sentinel on stdout BEFORE dumping captured annotations. This is the
-    # second proof-of-life event: STARTED says "the split pane spawned",
-    # EXIT says "the binary inside the pane exited with status N". Together
-    # they close the silent-failure window where:
-    #   - WezTerm split-pane succeeds (STARTED fires) → caller is happy
-    #   - revdiff inside the pane crashes fast (bad path, codepage mismatch,
-    #     missing file, future regression) → empty annotation output → caller
-    #     can't tell apart from "user reviewed and quit with 0 comments"
-    # Now the caller sees STARTED + EXIT(non-zero) + empty-annotations, and
-    # the SKILL.md tells them to surface that as a hard error to the user.
-    #
-    # Annotation dump always runs — revdiff may have written partial output
-    # before crashing, and capturing it is harmless if it's empty.
-    # -----------------------------------------------------------------------
-    if ($revdiffExit -ne 0) {
-        [Console]::Out.WriteLine("[revdiff:EXIT code=$revdiffExit]")
-        # Surface stderr captured by the .cmd wrapper. One `[revdiff:STDERR]`
-        # line per non-empty stderr line — the prefix matches the existing
-        # `^\[revdiff:` strip filter so diagnostics don't pollute annotation
-        # parsing, while a caller scanning for STDERR lines can present them
-        # to the user. Suppressed on revdiffExit == 0 so a normal review
-        # session never leaks stderr noise.
-        if (Test-Path -LiteralPath $stderrFile) {
-            $stderrText = Get-Content -LiteralPath $stderrFile -Raw -ErrorAction SilentlyContinue
-            if (-not [string]::IsNullOrEmpty($stderrText)) {
-                foreach ($line in ($stderrText -split "`r?`n")) {
-                    if ($line.Length -gt 0) {
-                        [Console]::Out.WriteLine("[revdiff:STDERR] $line")
-                    }
-                }
-            }
-        }
-        [Console]::Out.Flush()
-    }
-
-    # -----------------------------------------------------------------------
     # Dump captured annotation output to stdout — matches `cat "$OUTPUT_FILE"`.
-    # Use raw read so line endings and trailing newlines are preserved exactly.
+    # Annotations come first so a caller stripping `^\[revdiff:` framework
+    # lines sees only the user's content. Use raw read so line endings and
+    # trailing newlines are preserved exactly.
     # -----------------------------------------------------------------------
     if (Test-Path -LiteralPath $outputFile) {
         $content = Get-Content -LiteralPath $outputFile -Raw -ErrorAction SilentlyContinue
@@ -414,6 +371,54 @@ try {
             [Console]::Out.Write($content)
         }
     }
+
+    # -----------------------------------------------------------------------
+    # Surface stderr captured from revdiff via the `.cmd` wrapper's
+    # `2>"<stderrFile>"`. Emitted whenever stderr has content, regardless
+    # of revdiff's exit code.
+    #
+    # Why ALWAYS, not just on non-zero: revdiff can finish with exit 0
+    # while still having surfaced an internal error to the user via the
+    # TUI — typically a `git diff` / `git ls-files` invocation that failed
+    # mid-load and is rendered as an error message inside revdiff. The
+    # user reads the error, can't annotate it, presses `q`, revdiff exits
+    # cleanly. Without these STDERR lines on the success path the caller
+    # has no signal that anything went wrong. The `^\[revdiff:` prefix
+    # keeps these lines from polluting annotation parsing while still
+    # making them inspectable.
+    # -----------------------------------------------------------------------
+    if (Test-Path -LiteralPath $stderrFile) {
+        $stderrText = Get-Content -LiteralPath $stderrFile -Raw -ErrorAction SilentlyContinue
+        if (-not [string]::IsNullOrEmpty($stderrText)) {
+            foreach ($line in ($stderrText -split "`r?`n")) {
+                if ($line.Length -gt 0) {
+                    [Console]::Out.WriteLine("[revdiff:STDERR] $line")
+                }
+            }
+        }
+    }
+
+    # -----------------------------------------------------------------------
+    # Protocol terminator. Emitted UNCONDITIONALLY as the last line —
+    # paired with [revdiff:STARTED] this closes the protocol so the
+    # caller can tell the three outcomes apart without scraping any
+    # state files:
+    #   STARTED + EXIT code=0  → clean exit; annotations between the
+    #                            two markers are the user's input
+    #                            (possibly empty)
+    #   STARTED + EXIT code=N  → revdiff itself exited non-zero; see
+    #                            the STDERR lines above for the reason
+    #   STARTED, NO EXIT line  → the caller's tool call was killed
+    #                            before the launcher could emit EXIT;
+    #                            revdiff state is unknown, recovery is
+    #                            the caller's problem
+    # No "if exit != 0" gating: silent-success was indistinguishable
+    # from silent-disconnect under the previous asymmetric protocol,
+    # and the SKILL.md had to bolt on a fragile post-hoc recovery
+    # procedure to compensate. Always-emit removes the ambiguity.
+    # -----------------------------------------------------------------------
+    [Console]::Out.WriteLine("[revdiff:EXIT code=$revdiffExit]")
+    [Console]::Out.Flush()
 }
 catch {
     [Console]::Error.WriteLine("error: $($_.Exception.Message)")

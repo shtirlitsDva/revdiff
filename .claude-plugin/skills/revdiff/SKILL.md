@@ -113,53 +113,46 @@ The script outputs structured fields:
 
 ### Step 2: Launch Review
 
-When you are launching revdiff for the user (e.g., right after a refactor or analysis), pass `--description="..."` so the info popup (`i` key) explains what the change is and what to look at — markdown is supported. For longer prose, write the markdown to a temp file and pass `--description-file=$env:TEMP\revdiff-desc-<random>.md`. The two flags are mutually exclusive; both are optional. Skip when there's no useful context to add.
+When you are launching revdiff for the user (e.g., right after a refactor or analysis), pass `--description-file=$env:TEMP\revdiff-desc-<random>.md` so the info popup (`i` key) explains what the change is and what to look at — markdown is supported. Write the markdown to that temp file first. Skip when there's no useful context to add.
+
+> ⚠ Always use `--description-file=`, never `--description="..."`. The `.cmd` shim forwards args via `%*` (a literal byte-string), which mangles values containing spaces or quote characters. Temp-file paths under `$env:TEMP` are quote-free and round-trip clean.
 
 **When the recent change likely created new untracked files** (new packages, new test files, new docs, new scripts that haven't been `git add`-ed yet), pass `--untracked` so those files appear in the tree. Use this in working-tree mode (no ref, no `--staged`); skip it for ref-to-ref reviews where untracked files are not part of the historical diff.
 
 Run the bundled launcher via its `.cmd` shim — **never** invoke `launch-revdiff.ps1` directly with `pwsh -File`, because pwsh's `-File` argument parser splits any arg containing a colon (e.g. `--compare-old=C:\path` becomes two args), silently breaking every Windows absolute-path flag. The `.cmd` shim forwards args verbatim into `pwsh -Command`, which preserves them intact:
 
 ```powershell
-& "$env:CLAUDE_SKILL_DIR\scripts\launch-revdiff.cmd" [base] [against] [--staged] [--untracked] [--only=file1] [--all-files] [--exclude=prefix] [--compare-old=path --compare-new=path] [--description=text|--description-file=path] [--view=path]
+& "$env:CLAUDE_SKILL_DIR\scripts\launch-revdiff.cmd" [base] [against] [--staged] [--untracked] [--only=file1] [--all-files] [--exclude=prefix] [--compare-old=path --compare-new=path] [--description-file=path] [--view=path]
 ```
-
-For `--description=` values containing spaces, write the markdown to a temp file and use `--description-file=$env:TEMP\revdiff-desc-<random>.md` instead. The shim's `%*` forwarding round-trips path-shaped args cleanly but mangles strings that contain both spaces and embedded double quotes.
 
 The launcher requires WezTerm — `wezterm.exe` must be on PATH and `$env:WEZTERM_PANE` must be set (WezTerm sets this automatically inside its panes). The launcher spawns revdiff in a split pane of the current WezTerm pane and waits for it to exit.
 
 **Launcher output protocol** (stdout, in arrival order):
-1. `[revdiff:STARTED] pane-id=<id>` — proof the launcher reached the TUI-spawn step. If this line never arrives, the launcher crashed before that point.
-2. `[revdiff:EXIT code=<n>]` — emitted **only** when revdiff itself returned a non-zero exit status. Surfaces inside-pane fast-failures (bad path, codepage mismatch, missing file). When this line arrives, treat it as a **hard error** — not as user-approval.
-3. `[revdiff:STDERR] <line>` — emitted **only** together with a non-zero EXIT, one prefixed line per non-empty stderr line captured from revdiff. Tells you *why* revdiff failed (`unknown flag \`...\``, `cannot open <path>`, etc.). Surface these lines verbatim to the user when reporting the failure.
-4. Annotation text from revdiff's `--output` file (empty if no annotations were written, which is the normal "quit without comments" case).
 
-When parsing annotations, strip lines matching `^\[revdiff:` but check for an `EXIT` line first and surface both the exit code and any STDERR lines to the user.
+| line                            | when emitted                                                                                              |
+| ---                             | ---                                                                                                       |
+| `[revdiff:STARTED] pane-id=<id>` | Once, immediately after the WezTerm split spawns. Absence ⇒ launcher crashed before reaching the spawn.  |
+| (annotation blocks)             | Verbatim from revdiff's `--output` file. May be empty if the user quit without commenting.               |
+| `[revdiff:STDERR] <line>`       | Zero or more lines, one per non-empty line of revdiff's stderr. Emitted on **any** exit code, including 0. |
+| `[revdiff:EXIT code=<n>]`       | **Always** the final line. The protocol terminator.                                                       |
+
+Decision table for what you see:
+
+| pattern                                              | what it means                                                                                                          |
+| ---                                                  | ---                                                                                                                    |
+| `STARTED` + (annotations) + `EXIT code=0`            | Clean run. Process annotations.                                                                                        |
+| `STARTED` + `STDERR …` + `EXIT code=0`               | User quit cleanly, but revdiff surfaced an error to the TUI (typically a failed `git diff`/`git ls-files`). **Raise the STDERR lines to the user** — the review they tried to do did not actually happen. |
+| `STARTED` + `STDERR …` + `EXIT code=N` (N≠0)         | revdiff itself crashed. Surface STDERR verbatim; do not treat as approval.                                            |
+| `STARTED` + no `EXIT` line                           | Your tool call was killed before the launcher could emit `EXIT`. The WezTerm split may still be open. Don't re-launch — run `wezterm cli list` and/or ask the user. |
+| no `STARTED` line                                    | Launcher crashed before reaching the split-spawn step. See its stderr (bad PATH, `WEZTERM_PANE` unset, etc.).         |
+
+When parsing annotations, strip lines matching `^\[revdiff:`.
 
 **Fork-only `--view=<path>` flag**: pipes the named file into `revdiff --stdin --stdin-name=<basename>` so a tracked-clean file renders as a context-only scratch buffer. Use this when `--only=<path>` would yield "no files match" because the file has no git diff.
 
-**IMPORTANT — long-running command**: The launcher blocks until the user finishes reviewing in the WezTerm split pane, which can exceed the default bash tool timeout. Set the bash timeout parameter to the **maximum your harness allows** (e.g. 1800000 or higher on OpenCode). Do NOT use `run_in_background` for this — background-task handling is unreliable for interactive TUI launchers (processes may be killed unprompted, and polling loops can leave the session idle after the review finishes). If the review outlasts the timeout cap, the fallback in Step 3 handles it.
-
-The script:
-- Verifies WezTerm is available and `$env:WEZTERM_PANE` is set
-- Spawns a WezTerm split-pane that runs revdiff
-- Captures annotation output to a temp file under `$env:TEMP`
-- Prints captured annotations to stdout
+**IMPORTANT — long-running command**: The launcher blocks until the user finishes reviewing in the WezTerm split pane, which can exceed the default bash tool timeout. Set the bash timeout parameter to the **maximum your harness allows** (e.g. 1800000 or higher on OpenCode). Do NOT use `run_in_background` for this — background-task handling is unreliable for interactive TUI launchers (processes may be killed unprompted, and polling loops can leave the session idle after the review finishes). If the review outlasts the timeout cap, your captured stdout will end without an `[revdiff:EXIT code=…]` line; the WezTerm split is still open. Don't re-launch — ask the user when they're done.
 
 ### Step 3: Process Annotations
-
-**Collecting launcher output**: In the normal case the launcher returns synchronously with annotations on stdout — process them as described below. If the bash tool instead reports a timeout (on Claude Code the task keeps running in the background after the 10-minute cap; on other harnesses it may be killed outright), revdiff is almost certainly still open in the WezTerm split. Do NOT retry the launcher. Use the fallback:
-
-1. Tell the user: "The bash tool timed out, but revdiff may still be open. Let me know when you're done reviewing."
-2. Wait for the user to reply. They cannot respond while the WezTerm split has focus, so their reply confirms revdiff has exited.
-3. Read the most recent output file from `$env:TEMP`:
-   ```powershell
-   $f = Get-ChildItem -LiteralPath $env:TEMP -Filter 'revdiff-output-*' -File `
-        | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-   if ($f) { Get-Content -LiteralPath $f.FullName -Raw }
-   ```
-4. If it has content, process as annotations below. If empty or no file, the user quit without annotating.
-
-This fallback is safe because revdiff writes the output file atomically on exit — there is never a partial read.
 
 If the script produces output, the user made annotations. The output format is:
 
